@@ -1,0 +1,2583 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>STACKED</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin:0; height:100%; background:#07090d; overflow:hidden; }
+    canvas { display:block; width:100vw; height:100vh; touch-action:manipulation; }
+
+    .hud{
+      position:fixed; inset:0;
+      pointer-events:none;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      padding: calc(env(safe-area-inset-top) + 10px) 16px 16px;
+    }
+
+    .difficultyHud{
+      width:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:14px;
+      margin-top: 4px;
+    }
+
+    .difficultyLabel{
+      font-weight: 1000;
+      letter-spacing: .9px;
+      font-size: 22px;
+      color: #ffffff;
+      text-shadow:
+        -2px -2px 0 rgba(0,0,0,.60),
+         2px -2px 0 rgba(0,0,0,.60),
+        -2px  2px 0 rgba(0,0,0,.60),
+         2px  2px 0 rgba(0,0,0,.60),
+         0 10px 26px rgba(0,0,0,.55);
+      opacity:.95;
+      user-select:none;
+      transform: translateY(-3px);
+    }
+
+    .difficultyBar{
+      width: min(760px, 95vw);
+      --skullSize: clamp(20px, 3.6vw, 30px);
+      display:flex;
+      flex-direction:column;
+      align-items:stretch;
+      gap: 6px;
+      position:relative;
+    }
+
+    .difficultyTrackShell{
+      position:relative;
+      --trackH: 16px;
+      --trackInset: 2px;
+      /* Keep this wrapper only for layout; no pill-shaped background */
+      height: calc(var(--trackH) + var(--trackInset) + var(--skullSize) + 14px);
+      background: none;
+      border: none;
+      box-shadow: none;
+      border-radius: 0;
+      overflow: visible;
+    }
+
+    .difficultyTrackInner{
+      position:absolute;
+      left: var(--trackInset);
+      right: var(--trackInset);
+      bottom: var(--trackInset);
+      height: var(--trackH);
+      border-radius: 6px;
+      background: rgba(0,0,0,.28);
+      box-shadow: inset 0 2px 10px rgba(0,0,0,.45);
+      overflow:hidden;
+    }
+
+    .difficultyFill{
+      position:absolute; left:0; top:0; bottom:0;
+      width: 0%;
+      border-radius: 6px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.24), rgba(255,255,255,0)),
+        linear-gradient(90deg,
+          color-mix(in srgb, var(--fillColor, #36ffd8) 40%, #ffffff 60%),
+          var(--fillColor, #36ffd8));
+      box-shadow:
+        0 0 18px color-mix(in srgb, var(--fillColor, #36ffd8) 55%, transparent),
+        inset 0 0 0 1px rgba(255,255,255,.10);
+    }
+    @supports not (background: color-mix(in srgb, #fff 50%, #000)) {
+      .difficultyFill{
+        background:
+          linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0)),
+          var(--fillColor, #36ffd8);
+        box-shadow: 0 0 18px rgba(255,255,255,.10), inset 0 0 0 1px rgba(255,255,255,.10);
+      }
+    }
+
+    .difficultyGloss{
+      position:absolute; inset:0;
+      background: linear-gradient(180deg, rgba(255,255,255,.30), rgba(255,255,255,0));
+      opacity:.55;
+      pointer-events:none;
+    }
+
+    .difficultySkulls{
+      position:absolute;
+      left: var(--trackInset); right: var(--trackInset);
+      bottom: calc(var(--trackInset) + var(--trackH) + 1px);
+      height: var(--skullSize);
+      pointer-events:none;
+      z-index: 6;
+      overflow: visible;
+    }
+
+    .difficultyTicks{
+      position:absolute;
+      left: var(--trackInset); right: var(--trackInset);
+      bottom: var(--trackInset);
+      height: var(--trackH);
+      pointer-events:none;
+      z-index: 5;
+      overflow: visible;
+    }
+    
+    
+.tick{
+      position:absolute;
+      left:0;
+      top:50%;
+      transform: translate(-50%,-50%);
+width: 3px;
+      height: 18px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.12);
+      box-shadow:
+        0 1px 0 rgba(0,0,0,.45),
+        inset 0 1px 0 rgba(255,255,255,.10);
+      opacity: .75;
+    }
+    .tick.passed{
+      background: color-mix(in srgb, var(--c) 70%, rgba(255,255,255,.18));
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,.35),
+        0 0 12px color-mix(in srgb, var(--c) 55%, transparent);
+      opacity: 1;
+    }
+    .tick.current{
+      background: var(--c);
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,.45),
+        0 0 18px color-mix(in srgb, var(--c) 75%, transparent),
+        0 0 34px color-mix(in srgb, var(--c) 45%, transparent);
+      opacity: 1;
+    }
+    @supports not (background: color-mix(in srgb, #fff 50%, #000)) {
+      .tick.passed{ background: var(--c); }
+    }
+
+    /* Skull markers (gamey checkpoint skulls; harder tiers get "crazier") */
+    .skull{
+      width: var(--skullSize);
+      height: var(--skullSize);
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      transform: translate(-50%, 0);
+    }
+    .skull svg{
+      width: 100%;
+      height: 100%;
+      color: var(--c);
+      opacity: .40; /* not reached */
+      filter:
+        saturate(.95) brightness(.88)
+        drop-shadow(0 2px 0 rgba(0,0,0,.44));
+    }
+    .skull::after{
+      content:"";
+      position:absolute;
+      left:50%;
+      transform: translateX(-50%);
+      bottom: -6px;
+      width: 3px;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.12);
+      box-shadow: 0 1px 0 rgba(0,0,0,.45);
+      opacity: .55;
+    }
+    .skull.on::after{
+      background: color-mix(in srgb, var(--c) 70%, rgba(255,255,255,.18));
+      box-shadow:
+        0 1px 0 rgba(0,0,0,.45),
+        0 0 12px color-mix(in srgb, var(--c) 55%, transparent);
+      opacity: .95;
+    }
+    .skull.current::after{
+      background: var(--c);
+      box-shadow:
+        0 1px 0 rgba(0,0,0,.55),
+        0 0 18px color-mix(in srgb, var(--c) 75%, transparent);
+      opacity: 1;
+    }
+    @supports not (background: color-mix(in srgb, #fff 50%, #000)) {
+      .skull.on::after{ background: var(--c); opacity:.85; }
+      .skull.current::after{ background: var(--c); opacity:1; }
+    }
+
+
+    .skull.on svg{
+      opacity: 1;
+      filter:
+        saturate(1.15) brightness(1.05)
+        drop-shadow(0 2px 0 rgba(0,0,0,.45))
+        drop-shadow(0 0 14px color-mix(in srgb, var(--c) 55%, transparent));
+    }
+    .skull.current{
+      animation: skullPulse 1.05s ease-in-out infinite;
+    }
+    .skull.current svg{
+      opacity: 1;
+      filter:
+        saturate(1.25) brightness(1.10)
+        drop-shadow(0 2px 0 rgba(0,0,0,.45))
+        drop-shadow(0 0 22px color-mix(in srgb, var(--c) 78%, transparent))
+        drop-shadow(0 0 38px color-mix(in srgb, var(--c) 42%, transparent));
+    }
+
+    /* Fallback (no color-mix) */
+    @supports not (background: color-mix(in srgb, #fff 50%, #000)) {
+      .skull.on svg{ filter: saturate(1.10) brightness(1.05) drop-shadow(0 2px 0 rgba(0,0,0,.45)) drop-shadow(0 0 16px rgba(255,255,255,.10)); }
+      .skull.current svg{ filter: saturate(1.20) brightness(1.10) drop-shadow(0 2px 0 rgba(0,0,0,.45)) drop-shadow(0 0 24px rgba(255,255,255,.14)); }
+    }
+
+    @keyframes skullPulse{
+      0%,100%{ transform: scale(1.02); }
+      50%{ transform: scale(1.07); }
+    }
+
+    .scoreWrap{ margin-top: 10px; pointer-events:none; user-select:none; }
+    .scoreBig{
+      font-weight: 1000;
+      font-size: clamp(64px, 10vw, 110px);
+      line-height: .95;
+      letter-spacing: 1px;
+      color: rgba(255,255,255,.97);
+      text-shadow:
+        0 14px 44px rgba(0,0,0,.60),
+        0 0 26px rgba(120,190,255,.25);
+      -webkit-text-stroke: 2px rgba(0,0,0,.25);
+    }
+
+    .overlay{
+      margin-top: 14vh;
+      text-align:center;
+      text-shadow: 0 10px 30px rgba(0,0,0,.6);
+      pointer-events:none;
+    }
+    .title{ font-weight: 1000; font-size: clamp(34px, 6vw, 56px); letter-spacing: 1px; margin-bottom: 10px; }
+    .sub{ opacity:.82; font-weight: 750; font-size: clamp(14px, 2.5vw, 18px); line-height: 1.35; }
+
+    .toast{
+      position:fixed; left:50%; top: 22%;
+      transform: translateX(-50%);
+      font-weight: 1000;
+      letter-spacing: .8px;
+      font-size: clamp(18px, 3vw, 26px);
+      padding: 10px 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.14);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 14px 40px rgba(0,0,0,.45);
+      opacity:0; transition: opacity .12s ease;
+      pointer-events:none;
+    }
+    .toast.show{ opacity:1; }
+
+    /* DEV PANEL */
+    .devBackdrop{
+      position:fixed; inset:0;
+      background: rgba(0,0,0,.35);
+      backdrop-filter: blur(6px);
+      opacity:0;
+      pointer-events:none;
+      transition: opacity .14s ease;
+    }
+    .devBackdrop.open{ opacity:1; pointer-events:auto; }
+
+    .devPanel{
+      position:fixed;
+      top: env(safe-area-inset-top);
+      right: 12px;
+      width: min(390px, calc(100vw - 24px));
+      max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px);
+      border-radius: 18px;
+      background: rgba(10,12,18,.82);
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: 0 22px 60px rgba(0,0,0,.55);
+      transform: translateX(calc(100% + 18px));
+      transition: transform .18s ease;
+      pointer-events:auto;
+      overflow:hidden;
+    }
+    .devPanel.open{ transform: translateX(0); }
+
+    .devHead{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding: 12px 12px;
+      border-bottom: 1px solid rgba(255,255,255,.10);
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,0));
+    }
+    .devTitle{ font-weight: 950; letter-spacing: .6px; opacity:.92; }
+    .devBtn{
+      cursor:pointer;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: rgba(255,255,255,.92);
+      padding: 8px 10px;
+      border-radius: 999px;
+      font-weight: 850;
+      letter-spacing: .3px;
+    }
+    .devBtn:active{ transform: translateY(1px); }
+    .devBtn.active{
+      background: rgba(255,255,255,.14);
+      border-color: rgba(255,255,255,.22);
+      box-shadow: 0 0 0 1px rgba(255,255,255,.10) inset, 0 10px 26px rgba(0,0,0,.35);
+    }
+
+    .devBody{
+      padding: 12px;
+      display:flex;
+      flex-direction:column;
+      gap: 12px;
+      overflow:auto;
+      max-height: calc(100vh - 120px);
+    }
+    .devCard{
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.05);
+      padding: 10px;
+    }
+    .devRow{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding: 6px 2px;
+      font-weight: 750;
+      opacity:.92;
+      gap: 10px;
+    }
+    .devRow span:last-child{
+      opacity:.85;
+      font-weight: 900;
+      text-align:right;
+    }
+    .devControls{ display:flex; gap:10px; flex-wrap:wrap; }
+
+    .devField{
+      display:grid;
+      grid-template-columns: 1fr 98px;
+      gap: 8px;
+      align-items:center;
+      padding: 6px 2px 2px;
+    }
+    .devField label{
+      font-weight: 800;
+      opacity:.92;
+      font-size: 13px;
+      letter-spacing: .2px;
+    }
+    .devNum{
+      width: 98px;
+      box-sizing:border-box;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.22);
+      color: rgba(255,255,255,.92);
+      font-weight: 900;
+      outline:none;
+    }
+    .devSlider{
+      width: 100%;
+      margin: 6px 0 10px;
+      accent-color: #59e7ff;
+    }
+
+    .devHint{
+      position:fixed;
+      left: 50%;
+      bottom: env(safe-area-inset-bottom);
+      transform: translateX(-50%);
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.10);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 34px rgba(0,0,0,.35);
+      font-weight: 800;
+      letter-spacing: .3px;
+      opacity:0;
+      transition: opacity .18s ease;
+      pointer-events:none;
+      user-select:none;
+    }
+    .devHint.show{ opacity:.65; }
+  
+/* --- Unified difficulty UI tweaks --- */
+.devControls.mini{ gap:8px; }
+.devBtn.miniToggle{
+  padding:6px 10px;
+  font-size:12px;
+  border-radius:999px;
+  letter-spacing:.4px;
+}
+.devBtn.miniToggle.wide{ padding:6px 12px; min-width:130px; text-align:center; }
+.uRowGrid{ display:grid; grid-template-columns: 1fr; gap:10px; }
+.uSkRow{
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;
+  padding:10px;
+  background:rgba(0,0,0,.18);
+}
+.uSkRow .devField{ margin-top:8px; }
+
+.devText{
+  width:100%;
+  background:rgba(0,0,0,.35);
+  color:#fff;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:12px;
+  padding:10px 12px;
+  outline:none;
+}
+.devText:focus{ border-color: rgba(255,255,255,.26); }
+.devSelect{
+  width:100%;
+  background:rgba(0,0,0,.35);
+  color:#fff;
+  border:1px solid rgba(0,0,0,.35);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:12px;
+  padding:10px 12px;
+  outline:none;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="hud">
+  <div class="difficultyHud">
+    <div class="difficultyLabel" id="difficultyLabel">DIFFICULTY 0.0%</div>
+
+    <div class="difficultyBar" aria-hidden="true">
+      <div class="difficultyTrackShell">
+        <div class="difficultySkulls" id="difficultySkulls">
+        <!-- Checkpoints start AFTER the bar start (you don't begin at the first skull) -->
+        <span class="skull" data-i="0" style="--c:#36ffd8"></span>
+        <span class="skull" data-i="1" style="--c:#2f7bff"></span>
+        <span class="skull" data-i="2" style="--c:#7a46ff"></span>
+        <span class="skull" data-i="3" style="--c:#ff3bbd"></span>
+        <span class="skull" data-i="4" style="--c:#ff3b3b"></span>
+        <span class="skull" data-i="5" style="--c:#ff6a00"></span>
+        <span class="skull" data-i="6" style="--c:#8b0000"></span>
+</div>
+
+        <div class="difficultyTrackInner">
+          <div class="difficultyFill" id="difficultyFill"></div>
+          <div class="difficultyGloss"></div>
+        </div>
+
+        <div class="difficultyTicks" id="difficultyTicks" aria-hidden="true">
+        <span class="tick" data-i="0" style="--c:#36ffd8"></span>
+        <span class="tick" data-i="1" style="--c:#2f7bff"></span>
+        <span class="tick" data-i="2" style="--c:#7a46ff"></span>
+        <span class="tick" data-i="3" style="--c:#ff3bbd"></span>
+        <span class="tick" data-i="4" style="--c:#ff3b3b"></span>
+        <span class="tick" data-i="5" style="--c:#ff6a00"></span>
+        <span class="tick" data-i="6" style="--c:#8b0000"></span>
+</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="scoreWrap">
+    <div class="scoreBig" id="score">0</div>
+  </div>
+
+  <div class="overlay" id="overlay">
+    <div class="title">STACKED</div>
+    <div class="sub">
+      Tap / Click / Space to drop<br/>
+      Press <b>=</b> for Dev Panel
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">PERFECT!</div>
+
+<div class="devBackdrop" id="devBackdrop"></div>
+<div class="devPanel" id="devPanel" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="devHead">
+    <div class="devTitle">Dev Panel</div>
+    <button class="devBtn" id="devClose">Close</button>
+  </div>
+
+  <div class="devBody">
+    <div class="devCard">
+      <div class="devRow"><span>Best</span><span id="best">0</span></div>
+      <div class="devRow"><span>Score</span><span id="devScore">0</span></div>
+      <div class="devRow"><span>Difficulty</span><span id="devDifficulty">0.0%</span></div>
+      <div class="devRow"><span>Top Size</span><span id="devSize">10.00 × 10.00</span></div>
+      <div class="devRow"><span>Speed</span><span id="devSpeed">0.00</span></div>
+      <div class="devRow"><span>Move Range</span><span id="devRange">—</span></div>
+      <div class="devRow"><span>Perfect Window</span><span id="devPerfect">—</span></div>
+      <div class="devRow"><span>Gravity</span><span id="devGravity">—</span></div>
+    </div>
+
+        <div class="devCard" id="diffCard">
+      <div class="devRow"><span>Difficulty Preview</span><span id="segIncPreview">—</span></div>
+
+      <div class="devField" style="margin-top:10px;">
+        <label for="uBaseInc">Difficulty per Score (% / stack)</label>
+        <input class="devNum" id="uBaseIncNum" type="number" min="0" step="0.05" value="0.50">
+      </div>
+      <input class="devSlider" id="uBaseInc" type="range" min="0" max="5000" step="0.05" value="0.50">
+
+      <div id="uSkullEffect" style="margin-top:12px;">
+        <div class="devRow"><span>Skull Effect</span><span id="uSkModeLabel">Off</span></div>
+        <div class="devControls mini">
+          <button class="devBtn miniToggle" id="uSkModeOff">OFF</button>
+          <button class="devBtn miniToggle" id="uSkModeAdd">+ ADD</button>
+          <button class="devBtn miniToggle" id="uSkModeMult">× MULT</button>
+        </div>
+
+        <div id="uSkTargetWrap" style="margin-top:8px; display:none;">
+          <div class="devRow"><span>Affects</span><span id="uSkTargetLabel">Current difficulty</span></div>
+          <div class="devControls mini">
+            <button class="devBtn miniToggle wide" id="uSkTargetDifficulty">Difficulty</button>
+            <button class="devBtn miniToggle wide" id="uSkTargetRate">Per-score gain</button>
+          </div>
+        </div>
+
+        <div id="uSkValsBlock" style="margin-top:10px; display:none;">
+          <div class="devRow" style="opacity:.86;"><span id="uSkValsTitle">Values per Skull</span><span></span></div>
+          <div id="uSkValsWrap"></div>
+        </div>
+      </div>
+
+      <div id="uThresholdSettings" style="margin-top:12px;">
+        <div class="devRow" style="opacity:.9;"><span>Score needed for each Skull</span><span></span></div>
+        <div class="devRow" style="opacity:.72; font-size:12px; margin-top:4px;">
+          <span>These control when skulls light up, and when skull effects trigger.</span><span></span>
+        </div>
+        <div id="uThreshWrap"></div>
+      </div>
+
+      <div class="devControls" style="margin-top:10px;">
+        <button class="devBtn" id="diffResetBtn">Reset Difficulty</button>
+      </div>
+
+      <div class="devRow" style="margin-top:12px;"><span>Presets</span><span></span></div>
+      <div class="devField">
+        <label for="presetName">Preset name</label>
+        <input class="devText" id="presetName" type="text" placeholder="e.g. chill, hard, insane">
+      </div>
+
+      <div class="devField" style="margin-top:8px;">
+        <label for="presetSelect">Saved presets</label>
+        <select class="devSelect" id="presetSelect"></select>
+      </div>
+
+      <div class="devControls" style="margin-top:10px;">
+        <button class="devBtn" id="presetSaveBtn">Save / Overwrite</button>
+        <button class="devBtn" id="presetLoadBtn">Load</button>
+        <button class="devBtn" id="presetDeleteBtn">Delete</button>
+      </div>
+      <div class="devRow" style="opacity:.70; font-size:12px; margin-top:6px;">
+        <span>Presets save your current Difficulty settings only.</span><span></span>
+      </div>
+
+      <!-- Legacy difficulty controls kept hidden to prevent JS errors from older bindings -->
+      <div id="legacyDiffUI" style="display:none;">
+        <div class="devRow"><span>Legacy (hidden)</span><span></span></div>
+
+        <div id="scoreSettings">
+          <div class="devField">
+            <label for="baseInc">Legacy Base Increment</label>
+            <input class="devNum" id="baseIncNum" type="number" min="0" step="0.05" value="0.50">
+          </div>
+          <input class="devSlider" id="baseInc" type="range" min="0" max="5000" step="0.05" value="0.50">
+          <div id="segMultWrap"></div>
+          <div id="boostSettings"></div>
+        </div>
+
+        <div id="skullSettings">
+          <div class="devField">
+            <label for="cpInc">Legacy Checkpoint Increment</label>
+            <input class="devNum" id="cpIncNum" type="number" min="0" step="0.05" value="0.50">
+          </div>
+          <input class="devSlider" id="cpInc" type="range" min="0" max="5000" step="0.05" value="0.50">
+          <div id="cpMultWrap"></div>
+        </div>
+
+        <div id="thresholdSettings">
+          <button class="devBtn" id="thrManual" style="display:none;">Manual</button>
+          <button class="devBtn" id="thrMult" style="display:none;">Multiplier</button>
+          <button class="devBtn" id="thrAdd" style="display:none;">Additive</button>
+          <div id="thrManualBlock"></div>
+          <div id="thrFormulaBlock"></div>
+          <div id="threshWrap"></div>
+          <div id="thrValsWrap"></div>
+          <input class="devSlider" id="thrBase" style="display:none;">
+          <input class="devNum" id="thrBaseNum" style="display:none;">
+        </div>
+
+        <button class="devBtn" id="modeHybrid" style="display:none;">Hybrid</button>
+        <button class="devBtn" id="modePerCheckpoint" style="display:none;">Per Checkpoint</button>
+        <button class="devBtn" id="modePerScore" style="display:none;">Per Score</button>
+        <button class="devBtn" id="modeBoostedScore" style="display:none;">Boosted</button>
+        <button class="devBtn" id="advBtn" style="display:none;">Advanced</button>
+        <div id="advancedWrap" style="display:none;"></div>
+
+        <button class="devBtn" id="skullEffectAdd" style="display:none;">Add</button>
+        <button class="devBtn" id="skullEffectMult" style="display:none;">Mult</button>
+
+        <button class="devBtn" id="boostModeAdd" style="display:none;">Add</button>
+        <button class="devBtn" id="boostModeMult" style="display:none;">Mult</button>
+
+        <input class="devSlider" id="scoreBoostVal" style="display:none;">
+        <input class="devNum" id="scoreBoostValNum" style="display:none;">
+      </div>
+    </div>
+
+    <div class="devCard">
+      <div class="devControls">
+        <button class="devBtn" id="muteBtn">SFX: ON</button>
+        <button class="devBtn" id="restartBtn">Restart</button>
+        <button class="devBtn" id="resetAllBtn">Reset All</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="devHint" id="devHint">Press = to open Dev Panel</div>
+
+<script>
+(() => {
+  
+  
+  function skullSVG(tier){
+    // Game-y checkpoint skulls: soft + friendly early, "crazier" as tier increases.
+    const angry = tier >= 2;
+    const crack = tier >= 3;
+    const hornSmall = tier >= 4;
+    const hornBig = tier >= 5;
+    const spikes = tier >= 6;
+
+    const horns = hornSmall ? `
+      <path d="M14 18 L6 12 L9 24 Z" fill="currentColor" stroke="rgba(0,0,0,.92)" stroke-width="4.6" stroke-linejoin="round"/>
+      <path d="M50 18 L58 12 L55 24 Z" fill="currentColor" stroke="rgba(0,0,0,.92)" stroke-width="4.6" stroke-linejoin="round"/>` : '';
+
+    const bigHorns = hornBig ? `
+      <path d="M13 20 L3 10 L6 28 Z" fill="currentColor" stroke="rgba(0,0,0,.92)" stroke-width="4.6" stroke-linejoin="round"/>
+      <path d="M51 20 L61 10 L58 28 Z" fill="currentColor" stroke="rgba(0,0,0,.92)" stroke-width="4.6" stroke-linejoin="round"/>` : '';
+
+    const topSpikes = spikes ? `
+      <path d="M24 8 L20 0 L30 6 Z" fill="currentColor" stroke="rgba(0,0,0,.92)" stroke-width="4.6" stroke-linejoin="round"/>
+      <path d="M40 8 L34 6 L44 0 Z" fill="currentColor" stroke="rgba(0,0,0,.92)" stroke-width="4.6" stroke-linejoin="round"/>
+      <path d="M32 7 L28 2 L36 2 Z" fill="currentColor" stroke="rgba(0,0,0,.92)" stroke-width="4.6" stroke-linejoin="round"/>` : '';
+
+    const brows = angry ? `
+      <path d="M17 24 L29 20" stroke="rgba(0,0,0,.92)" stroke-width="4.8" stroke-linecap="round"/>
+      <path d="M47 24 L35 20" stroke="rgba(0,0,0,.92)" stroke-width="4.8" stroke-linecap="round"/>` : '';
+
+    const eyes = angry ? `
+      <path d="M19 31 C22 26 28 26 31 31 C28 36 22 36 19 31 Z" fill="rgba(0,0,0,.88)"/>
+      <path d="M33 31 C36 26 42 26 45 31 C42 36 36 36 33 31 Z" fill="rgba(0,0,0,.88)"/>` : `
+      <circle cx="24.8" cy="31.0" r="6.0" fill="rgba(0,0,0,.86)"/>
+      <circle cx="39.2" cy="31.0" r="6.0" fill="rgba(0,0,0,.86)"/>`;
+
+    const crackPath = crack ? `
+      <path d="M33 14 L28 18 L33 22 L29 26" fill="none" stroke="rgba(0,0,0,.85)" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>` : '';
+
+    const mouth = tier >= 5 ? `
+      <path d="M22 50 H42" stroke="rgba(0,0,0,.92)" stroke-width="4.0" stroke-linecap="round"/>
+      <path d="M26 50.2 V57.2 M30 50.0 V57.6 M34 50.0 V57.6 M38 50.2 V57.2" stroke="rgba(0,0,0,.92)" stroke-width="3.4" stroke-linecap="round"/>` : `
+      <path d="M24 51 C28 54 36 54 40 51" fill="none" stroke="rgba(0,0,0,.92)" stroke-width="4.0" stroke-linecap="round"/>`;
+
+    return `
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        ${topSpikes}
+        ${bigHorns || horns}
+        <!-- head -->
+        <path d="M32 9
+                 C20 9 12 17 12 28
+                 C12 38 17 46 24 49
+                 V52
+                 C24 58 28.5 61 32 61
+                 C35.5 61 40 58 40 52
+                 V49
+                 C47 46 52 38 52 28
+                 C52 17 44 9 32 9 Z"
+              fill="currentColor" stroke="rgba(0,0,0,.92)" stroke-width="4.8" stroke-linejoin="round"/>
+
+        <!-- jaw -->
+        <path d="M22 44
+                 C25 49 28.5 51.5 32 51.5
+                 C35.5 51.5 39 49 42 44
+                 V52
+                 C42 56.5 38.5 58.8 32 58.8
+                 C25.5 58.8 22 56.5 22 52 Z"
+              fill="currentColor" opacity=".98"
+              stroke="rgba(0,0,0,.92)" stroke-width="4.8" stroke-linejoin="round"/>
+
+        ${crackPath}
+        ${brows}
+        ${eyes}
+
+        <!-- nose -->
+        <path d="M32 34
+                 C30.4 34 29.2 35.2 29.7 36.7
+                 L31.2 40.6
+                 C31.6 41.5 32.4 41.5 32.8 40.6
+                 L34.3 36.7
+                 C34.8 35.2 33.6 34 32 34 Z" fill="rgba(0,0,0,.86)"/>
+
+        ${mouth}
+
+        <!-- tiny shine (keeps the "game icon" feel) -->
+        <path d="M18 20 C22 14 27 12 34 13" fill="none" stroke="rgba(255,255,255,.16)" stroke-width="3.2" stroke-linecap="round"/>
+      </svg>`;
+  }
+
+  for (const el of document.querySelectorAll('.skull')){
+    const i = Number(el.dataset.i||0);
+    el.innerHTML = skullSVG(i);
+  }
+
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let cw=0,ch=0,dpr=1;
+  function resize(){
+    dpr = Math.max(1, Math.min(2.5, window.devicePixelRatio||1));
+    cw = Math.floor(window.innerWidth);
+    ch = Math.floor(window.innerHeight);
+    canvas.width = Math.floor(cw*dpr);
+    canvas.height = Math.floor(ch*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', resize, {passive:true});
+  resize();
+
+  const elScore = document.getElementById('score');
+  const elBest  = document.getElementById('best');
+  const elOverlay = document.getElementById('overlay');
+  const elToast = document.getElementById('toast');
+
+  const elDifficultyLabel = document.getElementById('difficultyLabel');
+  const elDifficultyFill  = document.getElementById('difficultyFill');
+  const elSkulls = Array.from(document.querySelectorAll('#difficultySkulls .skull'));// skull icons
+  const elTicks  = Array.from(document.querySelectorAll('#difficultyTicks .tick'));// tick markers
+
+  // --- Difficulty meter layout: align skulls + divider ticks to score segments (1/N..1) ---
+  const meterShell = document.querySelector('.difficultyTrackShell');
+  const meterInner = meterShell ? meterShell.querySelector('.difficultyTrackInner') : null;
+  let _meterLayoutRAF = 0;
+
+    // Checkpoint positions (as fractions 0..1) so fill lines up with skull dividers.
+  let checkpointFractions = null;
+  let checkpointStartGap = 0.12;
+
+function layoutDifficultyMeter(){
+    if (!meterInner) return;
+
+    const N = Math.max(1, elSkulls.length); // checkpoint skulls (first checkpoint is NOT at 0%)
+    const innerRect = meterInner.getBoundingClientRect();
+    const innerW = Math.max(1, innerRect.width);
+
+    // Skull size (px) — read from the actual bar (not :root)
+    let skullPx = 26;
+    try{
+      const bar = document.querySelector('.difficultyBar');
+      const v = bar ? getComputedStyle(bar).getPropertyValue('--skullSize') : '';
+      const n = parseFloat(v);
+      if (Number.isFinite(n) && n > 0) skullPx = n;
+    }catch(e){}
+
+    // Push the first checkpoint in so it clearly isn't "at the start"
+    const startGapPx = Math.max(72, skullPx * 2.0);
+    checkpointStartGap = Math.min(0.38, Math.max(0.18, startGapPx / innerW));
+
+    // Fractions for each checkpoint (skull/tick). LAST checkpoint stays at the end (1.0).
+    checkpointFractions = new Array(N).fill(0).map((_, i) => {
+      if (N === 1) return 1;
+      return checkpointStartGap + (i / (N - 1)) * (1 - checkpointStartGap);
+    });
+
+    // Use ONE shared width so skulls and ticks can NEVER drift apart.
+    const sharedW = innerW;
+
+    for (const sEl of elSkulls){
+      const i = Number(sEl.dataset.i || 0);
+      const p = checkpointFractions?.[i] ?? 0;
+      sEl.style.left = `${(sharedW * p).toFixed(3)}px`;
+    }
+    for (const tEl of elTicks){
+      const i = Number(tEl.dataset.i || 0);
+      const p = checkpointFractions?.[i] ?? 0;
+      tEl.style.left = `${(sharedW * p).toFixed(3)}px`;
+    }
+  }
+
+
+
+  function scheduleDifficultyMeterLayout(){
+    cancelAnimationFrame(_meterLayoutRAF);
+    _meterLayoutRAF = requestAnimationFrame(layoutDifficultyMeter);
+  }
+
+  window.addEventListener('resize', scheduleDifficultyMeterLayout);
+  scheduleDifficultyMeterLayout();
+  try{ new ResizeObserver(scheduleDifficultyMeterLayout).observe(document.querySelector('.difficultyBar')); }catch(e){}
+
+  const elDevPanel = document.getElementById('devPanel');
+  const elDevBackdrop = document.getElementById('devBackdrop');
+  const elDevClose = document.getElementById('devClose');
+  const elDevHint = document.getElementById('devHint');
+
+  const elDevScore = document.getElementById('devScore');
+  const elDevDifficulty = document.getElementById('devDifficulty');
+  const elDevSize = document.getElementById('devSize');
+  const elDevSpeed = document.getElementById('devSpeed');
+
+  
+  const elDevRange = document.getElementById('devRange');
+  const elDevPerfect = document.getElementById('devPerfect');
+  const elDevGravity = document.getElementById('devGravity');
+const elMuteBtn = document.getElementById('muteBtn');
+  const elRestartBtn = document.getElementById('restartBtn');
+
+  const elBaseInc = document.getElementById('baseInc');
+  const elBaseIncNum = document.getElementById('baseIncNum');
+  const elSegMultWrap = document.getElementById('segMultWrap');
+  const elCpInc = document.getElementById('cpInc');
+  const elCpIncNum = document.getElementById('cpIncNum');
+  const elCpMultWrap = document.getElementById('cpMultWrap');
+  const elThreshWrap = document.getElementById('threshWrap');
+  const elSegIncPreview = document.getElementById('segIncPreview');
+  const elDiffResetBtn = document.getElementById('diffResetBtn');
+
+  const elModeLabel = document.getElementById('modeLabel');
+  const elModeHybrid = document.getElementById('modeHybrid');
+  const elModePerCheckpoint = document.getElementById('modePerCheckpoint');
+  const elModePerScore = document.getElementById('modePerScore');
+  const elModeBoostedScore = document.getElementById('modeBoostedScore');
+
+  const elScoreSettings = document.getElementById('scoreSettings');
+  const elSkullSettings = document.getElementById('skullSettings');
+  const elBoostSettings = document.getElementById('boostSettings');
+  const elThresholdSettings = document.getElementById('thresholdSettings');
+
+  const elSkullEffectLabel = document.getElementById('skullEffectLabel');
+  const elSkullEffectAdd = document.getElementById('skullEffectAdd');
+  const elSkullEffectMult = document.getElementById('skullEffectMult');
+  const elCpIncLabel = document.getElementById('cpIncLabel');
+
+  const elBoostModeLabel = document.getElementById('boostModeLabel');
+  const elBoostModeAdd = document.getElementById('boostModeAdd');
+  const elBoostModeMult = document.getElementById('boostModeMult');
+  const elScoreBoostLabel = document.getElementById('scoreBoostLabel');
+  const elScoreBoostVal = document.getElementById('scoreBoostVal');
+  const elScoreBoostValNum = document.getElementById('scoreBoostValNum');
+
+  const elThrFormulaBlock = document.getElementById('thrFormulaBlock');
+  const elThrManualBlock = document.getElementById('thrManualBlock');
+
+  const elAdvBtn = document.getElementById('advBtn');
+  const elAdvancedWrap = document.getElementById('advancedWrap');
+  const elAdvScoreGroup = document.getElementById('advScoreGroup');
+  const elAdvSkullGroup = document.getElementById('advSkullGroup');
+  const elThrModeLabel = document.getElementById('thrModeLabel');
+  const elThrModeManual = document.getElementById('thrModeManual');
+  const elThrModeMult = document.getElementById('thrModeMult');
+  const elThrModeAdd = document.getElementById('thrModeAdd');
+  const elThrBase = document.getElementById('thrBase');
+  const elThrBaseNum = document.getElementById('thrBaseNum');
+  const elThrValsTitle = document.getElementById('thrValsTitle');
+  const elThrValsWrap = document.getElementById('thrValsWrap');
+  const elResetAllBtn = document.getElementById('resetAllBtn');
+
+  function showToast(text){
+    elToast.textContent = text;
+    elToast.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=>elToast.classList.remove('show'), 260);
+  }
+
+  let sfxOn = true;
+  let audioCtx = null;
+  function beep(freq=440, dur=0.04, type='sine', gain=0.04){
+    if (!sfxOn) return;
+    try{
+      audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+      const t0 = audioCtx.currentTime;
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, t0);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(gain, t0+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0+dur);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t0);
+      o.stop(t0+dur+0.02);
+    }catch{}
+  }
+
+  let devOpen = false;
+  function setDev(open){
+    devOpen = !!open;
+    elDevPanel.classList.toggle('open', devOpen);
+    elDevBackdrop.classList.toggle('open', devOpen);
+    elDevPanel.setAttribute('aria-hidden', devOpen ? 'false' : 'true');
+  }
+  elDevClose.addEventListener('click', ()=>setDev(false));
+  elDevBackdrop.addEventListener('click', ()=>setDev(false));
+
+  function flashDevHint(){
+    elDevHint.classList.add('show');
+    clearTimeout(flashDevHint._t);
+    flashDevHint._t = setTimeout(()=>elDevHint.classList.remove('show'), 1400);
+  }
+  flashDevHint();
+
+  elMuteBtn.addEventListener('click', ()=>{
+    sfxOn = !sfxOn;
+    elMuteBtn.textContent = `SFX: ${sfxOn ? 'ON' : 'OFF'}`;
+    if (sfxOn) beep(660, 0.03);
+  });
+  elRestartBtn.addEventListener('click', ()=>reset(false));
+
+  if (elResetAllBtn) elResetAllBtn.addEventListener('click', ()=>{
+    applyDiffCfg(clone(diffDefaults));
+    sfxOn = true;
+    elMuteBtn.textContent = `SFX: ${sfxOn ? 'ON' : 'OFF'}`;
+    beep(660, 0.03);
+  });
+
+  const BEST_KEY = 'stacked_best_v5';
+  let best = Number(localStorage.getItem(BEST_KEY) || 0);
+  elBest.textContent = String(best);
+
+  const DIFF_KEY = 'stacked_diff_config_v2';
+  const diffDefaults = { mode:'hybrid', skullEffect:'add', scoreBoostMode:'add', scoreBoostVal:0.00, advanced:false, thrMode:'manual', thrBase:8, thrVals:[1,2,3,4,5,6,7], base:0.50, mult:[1,1,1,1,1,1,1], cpBase:0.00, cpMult:[1,1,1,1,1,1,1], thresholds:[8,16,24,32,40,48,56] };
+
+  const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+  const lerp = (a,b,t)=>a+(b-a)*t;
+  const snap3 = (v)=>Math.round(v*1000)/1000;
+  const clone = (o)=>JSON.parse(JSON.stringify(o));
+
+  function ensureSliderMax(slider, v){
+    if (!slider) return;
+    const val = Math.max(0, Number(v)||0);
+    const curMax = Number(slider.max||0);
+    if (!Number.isFinite(curMax) || curMax <= 0){ slider.max = String(Math.max(10, Math.ceil(val*1.2))); return; }
+    if (val > curMax){ slider.max = String(Math.ceil(val*1.2)); }
+  }
+
+  function sanitizeDiffCfg(cfg){
+    cfg.mode = (cfg.mode === 'perCheckpoint' || cfg.mode === 'hybrid' || cfg.mode === 'boostedScore') ? cfg.mode : 'perScore';
+
+    cfg.skullEffect = (cfg.skullEffect === 'mult') ? 'mult' : 'add';
+    cfg.scoreBoostMode = (cfg.scoreBoostMode === 'mult') ? 'mult' : 'add';
+    cfg.scoreBoostVal = Number(cfg.scoreBoostVal);
+    if (!Number.isFinite(cfg.scoreBoostVal)) cfg.scoreBoostVal = 0;
+    cfg.scoreBoostVal = Math.max(0, cfg.scoreBoostVal);
+    cfg.advanced = !!cfg.advanced;
+
+    cfg.thrMode = (cfg.thrMode === 'mult' || cfg.thrMode === 'add') ? cfg.thrMode : 'manual';
+    cfg.thrBase = Math.max(0, Math.round(Number(cfg.thrBase) || 0));
+    cfg.thrVals = (cfg.thrVals || []).slice(0,7).map(v => Number(v));
+    while (cfg.thrVals.length < 7) cfg.thrVals.push(cfg.thrVals.length + 1);
+    cfg.thrVals = cfg.thrVals.map(v => (Number.isFinite(v) ? v : 0));
+
+    // per-score component
+    cfg.base = Number(cfg.base);
+    if (!Number.isFinite(cfg.base)) cfg.base = 0;
+    cfg.base = Math.max(0, cfg.base);
+
+    cfg.mult = (cfg.mult||[]).slice(0,7).map(v => {
+      v = Number(v);
+      if (!Number.isFinite(v)) v = 0;
+      return Math.max(0, v);
+    });
+    while (cfg.mult.length < 7) cfg.mult.push(1);
+
+    // per-checkpoint component
+    cfg.cpBase = Number(cfg.cpBase);
+    if (!Number.isFinite(cfg.cpBase)) cfg.cpBase = 0;
+    cfg.cpBase = Math.max(0, cfg.cpBase);
+
+    cfg.cpMult = (cfg.cpMult||[]).slice(0,7).map(v => {
+      v = Number(v);
+      if (!Number.isFinite(v)) v = 0;
+      return Math.max(0, v);
+    });
+    while (cfg.cpMult.length < 7) cfg.cpMult.push(1);
+
+    // manual thresholds
+    let t = (cfg.thresholds||[]).slice(0,7).map(v => Math.max(1, Math.round(Number(v)||1)));
+    while (t.length < 7) t.push(t.length ? t[t.length-1]+8 : 8);
+    for (let i=0;i<t.length;i++){
+      if (i>0) t[i] = Math.max(t[i], t[i-1]+1);
+    }
+    cfg.thresholds = t;
+    return cfg;
+  }
+  function loadDiffCfg(){
+    try{
+      const raw = JSON.parse(localStorage.getItem(DIFF_KEY) || "null");
+      if (!raw) return sanitizeDiffCfg(clone(diffDefaults));
+      const cfg = clone(diffDefaults);
+      if (typeof raw.base === 'number') cfg.base = raw.base;
+            if (typeof raw.mode === 'string') cfg.mode = raw.mode;
+            if (typeof raw.skullEffect === 'string') cfg.skullEffect = raw.skullEffect;
+      if (typeof raw.scoreBoostMode === 'string') cfg.scoreBoostMode = raw.scoreBoostMode;
+      if (typeof raw.scoreBoostVal === 'number') cfg.scoreBoostVal = raw.scoreBoostVal;
+      if (typeof raw.advanced === 'boolean') cfg.advanced = raw.advanced;
+if (typeof raw.thrMode === 'string') cfg.thrMode = raw.thrMode;
+      if (typeof raw.thrBase === 'number') cfg.thrBase = raw.thrBase;
+      if (Array.isArray(raw.thrVals) && raw.thrVals.length>=7) cfg.thrVals = raw.thrVals.slice(0,7).map(Number);
+      if (typeof raw.cpBase === 'number') cfg.cpBase = raw.cpBase;
+      if (Array.isArray(raw.cpMult) && raw.cpMult.length>=7) cfg.cpMult = raw.cpMult.slice(0,7).map(Number);
+if (Array.isArray(raw.mult) && raw.mult.length>=7) cfg.mult = raw.mult.slice(0,7).map(Number);
+      if (Array.isArray(raw.thresholds) && raw.thresholds.length>=7) cfg.thresholds = raw.thresholds.slice(0,7).map(Number);
+      return sanitizeDiffCfg(cfg);
+    }catch{
+      return sanitizeDiffCfg(clone(diffDefaults));
+    }
+  }
+  function saveDiffCfg(){ localStorage.setItem(DIFF_KEY, JSON.stringify(diffCfg)); }
+  let diffCfg = loadDiffCfg();
+
+  const segLabels = ["Tier 1","Tier 2","Tier 3","Tier 4","Tier 5","Tier 6","Tier 7"];
+  function makeSegRow(i){
+    const row = document.createElement('div');
+    row.className = 'devCard';
+    row.style.padding='10px';
+    row.style.marginTop='10px';
+    row.innerHTML = `
+      <div class="devRow"><span>${segLabels[i]}</span><span id="segInc_${i}">—</span></div>
+      <div class="devField">
+        <label for="segMult_${i}">Tier mult</label>
+        <input class="devNum" id="segMultNum_${i}" type="number" step="0.05" min="0">
+      </div>
+      <input class="devSlider" id="segMult_${i}" type="range" min="0" max="20" step="0.05">
+    `;
+    return row;
+  }
+  function makeThreshRow(i){
+    const skullNum = i+2;
+    const row = document.createElement('div');
+    row.className='devField';
+    row.innerHTML = `
+      <label for="thr_${i}">Skull ${skullNum} at score</label>
+      <input class="devNum" id="thr_${i}" type="number" step="1" min="1" max="99999">
+    `;
+    return row;
+  }
+
+  elSegMultWrap.innerHTML = '';
+  for (let i=0;i<7;i++) elSegMultWrap.appendChild(makeSegRow(i));
+
+  function makeCpRow(i){
+    const row = document.createElement('div');
+    row.className = 'devCard';
+    row.style.padding='10px';
+    row.style.marginTop='10px';
+    row.innerHTML = `
+      <div class="devRow"><span>${segLabels[i]}</span><span id="cpInc_${i}">—</span></div>
+      <div class="devField">
+        <label for="cpMult_${i}">Tier mult</label>
+        <input class="devNum" id="cpMultNum_${i}" type="number" step="0.05" min="0">
+      </div>
+      <input class="devSlider" id="cpMult_${i}" type="range" min="0" max="20" step="0.05">
+    `;
+    return row;
+  }
+  if (elCpMultWrap){
+    elCpMultWrap.innerHTML = '';
+    for (let i=0;i<7;i++) elCpMultWrap.appendChild(makeCpRow(i));
+  }
+
+  elThreshWrap.innerHTML = '';
+  const thrInputs = [];
+  for (let i=0;i<7;i++){
+    const r = makeThreshRow(i);
+    elThreshWrap.appendChild(r);
+    thrInputs.push(r.querySelector('input'));
+  }
+
+  function makeThrValRow(i){
+    const skullNum = i + 2;
+    const row = document.createElement('div');
+    row.className = 'devCard';
+    row.style.padding = '10px';
+    row.style.marginTop = '10px';
+    row.innerHTML = `
+      <div class="devRow"><span>Skull ${skullNum}</span><span id="thrValPreview_${i}">—</span></div>
+      <div class="devField">
+        <label for="thrVal_${i}" id="thrValLabel_${i}">Value</label>
+        <input class="devNum" id="thrValNum_${i}" type="number" step="0.1" min="0">
+      </div>
+      <input class="devSlider" id="thrVal_${i}" type="range" min="0" max="200" step="0.1">
+    `;
+    return row;
+  }
+
+  if (elThrValsWrap){
+    elThrValsWrap.innerHTML = '';
+    for (let i=0;i<7;i++) elThrValsWrap.appendChild(makeThrValRow(i));
+  }
+
+  function syncDiffUI(){
+    // base per-score
+    ensureSliderMax(elBaseInc, diffCfg.base);
+    if (elBaseInc) elBaseInc.value = String(diffCfg.base);
+    if (elBaseIncNum) elBaseIncNum.value = diffCfg.base.toFixed(2);
+
+    // base per-skull
+    ensureSliderMax(elCpInc, diffCfg.cpBase);
+    if (elCpInc) elCpInc.value = String(diffCfg.cpBase);
+    if (elCpIncNum) elCpIncNum.value = diffCfg.cpBase.toFixed(2);
+
+    // skull effect UI
+    const skullEffect = diffCfg.skullEffect || 'add';
+    if (elSkullEffectLabel) elSkullEffectLabel.textContent = (skullEffect === 'mult') ? 'Multiplicative' : 'Additive';
+    if (elCpIncLabel){
+      elCpIncLabel.textContent = (skullEffect === 'mult') ? 'Skull multiplier per checkpoint (% multiplier)' : 'Difficulty per Skull (% added per skull)';
+    }
+    if (elSkullEffectAdd && elSkullEffectMult){
+      elSkullEffectAdd.classList.toggle('active', skullEffect === 'add');
+      elSkullEffectMult.classList.toggle('active', skullEffect === 'mult');
+    }
+    if (elCpIncLabel){
+      elCpIncLabel.textContent = (skullEffect === 'mult')
+        ? 'Skull multiplier (% per skull)'
+        : 'Difficulty per Skull (percent)';
+    }
+
+    // score-boost UI
+    const boostMode = diffCfg.scoreBoostMode || 'add';
+    if (elBoostModeLabel) elBoostModeLabel.textContent = (boostMode === 'mult') ? 'Multiplicative' : 'Additive';
+    if (elScoreBoostLabel){
+      elScoreBoostLabel.textContent = (boostMode === 'mult') ? 'Extra multiplier per Skull (adds to 1 + tier×value)' : 'Extra difficulty (%/score) per Skull';
+    }
+    if (elBoostModeAdd && elBoostModeMult){
+      elBoostModeAdd.classList.toggle('active', boostMode === 'add');
+      elBoostModeMult.classList.toggle('active', boostMode === 'mult');
+    }
+    if (elScoreBoostLabel){
+      elScoreBoostLabel.textContent = (boostMode === 'mult')
+        ? 'Boost factor per Skull (0.20 = +20%)'
+        : 'Extra difficulty (%/score) per Skull';
+    }
+    if (elScoreBoostVal){
+      ensureSliderMax(elScoreBoostVal, diffCfg.scoreBoostVal);
+      elScoreBoostVal.value = String(diffCfg.scoreBoostVal);
+    }
+    if (elScoreBoostValNum) elScoreBoostValNum.value = Number(diffCfg.scoreBoostVal).toFixed(2);
+
+    // mode UI
+    const mode = diffCfg.mode || 'perScore';
+    if (elModeLabel){
+      elModeLabel.textContent =
+        (mode === 'hybrid') ? 'Score + Skull' :
+        (mode === 'perCheckpoint') ? 'Skull Only' :
+        (mode === 'boostedScore') ? 'Score + Skull Boosts Difficulty' :
+        'Score Only';
+    }
+    if (elModeHybrid && elModePerCheckpoint && elModePerScore && elModeBoostedScore){
+      elModeHybrid.classList.toggle('active', mode === 'hybrid');
+      elModePerCheckpoint.classList.toggle('active', mode === 'perCheckpoint');
+      elModePerScore.classList.toggle('active', mode === 'perScore');
+      elModeBoostedScore.classList.toggle('active', mode === 'boostedScore');
+    }
+
+    // show/hide blocks based on mode
+    const hasScore = (mode === 'perScore' || mode === 'hybrid' || mode === 'boostedScore');
+    const hasSkull = (mode === 'perCheckpoint' || mode === 'hybrid');
+    const hasBoost = (mode === 'boostedScore');
+
+    if (elScoreSettings) elScoreSettings.style.display = hasScore ? '' : 'none';
+    if (elSkullSettings) elSkullSettings.style.display = hasSkull ? '' : 'none';
+    if (elBoostSettings) elBoostSettings.style.display = hasBoost ? '' : 'none';
+
+    // thresholds are only relevant when skulls affect difficulty (or when using advanced tier multipliers)
+    const needsThreshold = (hasSkull || hasBoost || diffCfg.advanced);
+    if (elThresholdSettings) elThresholdSettings.style.display = needsThreshold ? '' : 'none';
+
+    // threshold mode UI
+    const thrMode = diffCfg.thrMode || 'manual';
+    if (elThrModeLabel) elThrModeLabel.textContent =
+      (thrMode==='mult') ? 'Multiplicative (base × value)' :
+      (thrMode==='add') ? 'Additive (base + value)' :
+      'Manual';
+    if (elThrModeManual && elThrModeMult && elThrModeAdd){
+      elThrModeManual.classList.toggle('active', thrMode==='manual');
+      elThrModeMult.classList.toggle('active', thrMode==='mult');
+      elThrModeAdd.classList.toggle('active', thrMode==='add');
+    }
+
+    // threshold block visibility
+    const formula = (thrMode === 'mult' || thrMode === 'add');
+    if (elThrFormulaBlock) elThrFormulaBlock.style.display = formula ? '' : 'none';
+    if (elThrManualBlock) elThrManualBlock.style.display = formula ? 'none' : '';
+
+    if (elThrBase){
+      ensureSliderMax(elThrBase, diffCfg.thrBase);
+      elThrBase.value = String(diffCfg.thrBase);
+    }
+    if (elThrBaseNum) elThrBaseNum.value = String(diffCfg.thrBase);
+    if (elThrValsTitle){
+      elThrValsTitle.textContent = (thrMode==='add') ? 'Add list (value)' :
+                                   (thrMode==='mult' ? 'Mult list (value)' : 'Values');
+    }
+
+    // Advanced multipliers toggle
+    if (elAdvBtn) elAdvBtn.textContent = `Advanced multipliers: ${diffCfg.advanced ? 'ON' : 'OFF'}`;
+    if (elAdvancedWrap) elAdvancedWrap.style.display = diffCfg.advanced ? '' : 'none';
+    // within advanced: only show groups that matter for the selected difficulty type
+    const hasScoreMult = hasScore; // score-based difficulty uses per-score multipliers
+    const hasSkullMult = hasSkull; // skull-based difficulty uses per-skull multipliers
+    if (elAdvScoreGroup) elAdvScoreGroup.style.display = (diffCfg.advanced && hasScoreMult) ? '' : 'none';
+    if (elAdvSkullGroup) elAdvSkullGroup.style.display = (diffCfg.advanced && hasSkullMult) ? '' : 'none';
+
+    // Update multiplier controls (even if hidden)
+    const scoreMult = diffCfg.mult;
+    const skullMult = diffCfg.cpMult;
+
+    const incs=[];
+    for (let i=0;i<7;i++){
+      const s = document.getElementById(`segMult_${i}`);
+      const n = document.getElementById(`segMultNum_${i}`);
+      const incEl = document.getElementById(`segInc_${i}`);
+      const v = Number(scoreMult[i] ?? 1);
+      const inc = diffCfg.base * v;
+      incs.push(inc);
+      if (s){ ensureSliderMax(s, v); s.value = String(v); }
+      if (n) n.value = v.toFixed(2);
+      if (incEl) incEl.textContent = `${inc.toFixed(2)}% / score`;
+    }
+
+    const cpIncs=[];
+    for (let i=0;i<7;i++){
+      const s2 = document.getElementById(`cpMult_${i}`);
+      const n2 = document.getElementById(`cpMultNum_${i}`);
+      const incEl2 = document.getElementById(`cpInc_${i}`);
+      const v2 = Number(skullMult[i] ?? 1);
+      const inc2 = diffCfg.cpBase * v2;
+      cpIncs.push(inc2);
+      if (s2){ ensureSliderMax(s2, v2); s2.value = String(v2); }
+      if (n2) n2.value = v2.toFixed(2);
+      if (incEl2) incEl2.textContent = `${inc2.toFixed(2)}% / skull`;
+    }
+
+    const thresholds = getThresholds();
+
+    // manual threshold inputs (if present)
+    if (typeof thrInputs !== 'undefined'){
+      for (let i=0;i<7;i++){
+        if (!thrInputs[i]) continue;
+        thrInputs[i].value = String(thresholds[i]);
+        const locked = (thrMode === 'mult' || thrMode === 'add');
+        thrInputs[i].disabled = locked;
+        thrInputs[i].style.opacity = locked ? '0.55' : '1';
+      }
+    }
+
+    // formula vals
+    if (elThrValsWrap){
+      for (let i=0;i<7;i++){
+        const s = document.getElementById(`thrVal_${i}`);
+        const n = document.getElementById(`thrValNum_${i}`);
+        const p = document.getElementById(`thrValPreview_${i}`);
+        const lbl = document.getElementById(`thrValLabel_${i}`);
+        if (!s || !n || !p || !lbl) continue;
+        const v = Number(diffCfg.thrVals?.[i] ?? (i+1));
+        ensureSliderMax(s, v);
+        s.value = String(v);
+        n.value = String(v);
+        p.textContent = `Final skull score: ${thresholds[i]}`;
+        lbl.textContent = (thrMode==='add') ? 'Add' : (thrMode==='mult' ? 'Mult' : 'Value');
+        const disabled = (thrMode==='manual');
+        s.disabled = disabled;
+        n.disabled = disabled;
+        s.style.opacity = disabled ? '0.55' : '1';
+        n.style.opacity = disabled ? '0.55' : '1';
+      }
+    }
+
+    // preview line
+    // Score preview depends on mode
+    let scoreMin = diffCfg.base;
+    let scoreMax = diffCfg.base;
+    if (mode === 'boostedScore'){
+      const b = diffCfg.scoreBoostVal;
+      if (boostMode === 'mult'){
+        scoreMin = diffCfg.base * (1 + 0*b);
+        scoreMax = diffCfg.base * (1 + 7*b);
+      }else{
+        scoreMin = diffCfg.base + 0*b;
+        scoreMax = diffCfg.base + 7*b;
+      }
+    }else if (diffCfg.advanced){
+      scoreMin = Math.min(...incs);
+      scoreMax = Math.max(...incs);
+    }
+
+    let skullMin = diffCfg.cpBase;
+    let skullMax = diffCfg.cpBase;
+    if (diffCfg.advanced){
+      skullMin = Math.min(...cpIncs);
+      skullMax = Math.max(...cpIncs);
+    }
+
+    const scoreTxt = hasScore ? `${scoreMin.toFixed(2)}%→${scoreMax.toFixed(2)}% /score` : '—';
+    const skullTxt = hasSkull ? `${skullMin.toFixed(2)}%→${skullMax.toFixed(2)}% /skull` :
+                     (mode === 'boostedScore') ? `boost ${diffCfg.scoreBoostVal.toFixed(2)} ${boostMode==='mult'?'factor':'%/score'} /skull` : '—';
+    elSegIncPreview.textContent = `Score: ${scoreTxt}  |  Skull: ${skullTxt}`;
+  }
+  function applyDiffCfg(next){
+    diffCfg = sanitizeDiffCfg(next);
+    saveDiffCfg();
+    syncDiffUI();
+  }
+  function setBase(v){
+    ensureSliderMax(elBaseInc, v);
+    const next = clone(diffCfg);
+    next.base = Number(v);
+    applyDiffCfg(next);
+  }
+
+  function setCpBase(v){
+    ensureSliderMax(elCpInc, v);
+    const next = clone(diffCfg);
+    next.cpBase = Number(v);
+    applyDiffCfg(next);
+  }
+  if (elCpInc) elCpInc.addEventListener('input', e=>setCpBase(e.target.value));
+  if (elCpIncNum) elCpIncNum.addEventListener('change', e=>setCpBase(e.target.value));
+  elBaseInc.addEventListener('input', e=>setBase(e.target.value));
+  elBaseIncNum.addEventListener('change', e=>setBase(e.target.value));
+
+  for (let i=0;i<7;i++){
+    const s = document.getElementById(`segMult_${i}`);
+    const n = document.getElementById(`segMultNum_${i}`);
+    function setSeg(v){
+      ensureSliderMax(s, v);
+      const next = clone(diffCfg);
+      next.mult[i] = Number(v);
+      applyDiffCfg(next);
+    }
+    s.addEventListener('input', e=>setSeg(e.target.value));
+    n.addEventListener('change', e=>setSeg(e.target.value));
+  }
+
+  // per-checkpoint tier multipliers
+  for (let i=0;i<7;i++){
+    const s = document.getElementById(`cpMult_${i}`);
+    const n = document.getElementById(`cpMultNum_${i}`);
+    if (!s || !n) continue;
+    function setCpSeg(v){
+      ensureSliderMax(s, v);
+      const next = clone(diffCfg);
+      next.cpMult = (next.cpMult||[]).slice(0,7);
+      while (next.cpMult.length < 7) next.cpMult.push(1);
+      next.cpMult[i] = Number(v);
+      applyDiffCfg(next);
+    }
+    s.addEventListener('input', e=>setCpSeg(e.target.value));
+    n.addEventListener('change', e=>setCpSeg(e.target.value));
+  }
+
+for (let i=0;i<7;i++){
+    thrInputs[i].addEventListener('change', e=>{
+      const next = clone(diffCfg);
+      next.thresholds[i] = Number(e.target.value);
+      applyDiffCfg(next);
+    });
+  }
+  elDiffResetBtn.addEventListener('click', ()=>applyDiffCfg(clone(diffDefaults)));
+
+  // mode toggle
+  function setMode(m){
+    const next = clone(diffCfg);
+    next.mode = (m === 'perCheckpoint' || m === 'hybrid' || m === 'boostedScore') ? m : 'perScore';
+    applyDiffCfg(next);
+  }
+  if (elModeHybrid) elModeHybrid.addEventListener('click', ()=>setMode('hybrid'));
+  if (elModePerCheckpoint) elModePerCheckpoint.addEventListener('click', ()=>setMode('perCheckpoint'));
+  if (elModePerScore) elModePerScore.addEventListener('click', ()=>setMode('perScore'));
+  if (elModeBoostedScore) elModeBoostedScore.addEventListener('click', ()=>setMode('boostedScore'));
+
+  function setSkullEffect(m){
+    const next = clone(diffCfg);
+    next.skullEffect = (m === 'mult') ? 'mult' : 'add';
+    applyDiffCfg(next);
+  }
+  if (elSkullEffectAdd) elSkullEffectAdd.addEventListener('click', ()=>setSkullEffect('add'));
+  if (elSkullEffectMult) elSkullEffectMult.addEventListener('click', ()=>setSkullEffect('mult'));
+
+  function setBoostMode(m){
+    const next = clone(diffCfg);
+    next.scoreBoostMode = (m === 'mult') ? 'mult' : 'add';
+    applyDiffCfg(next);
+  }
+  if (elBoostModeAdd) elBoostModeAdd.addEventListener('click', ()=>setBoostMode('add'));
+  if (elBoostModeMult) elBoostModeMult.addEventListener('click', ()=>setBoostMode('mult'));
+
+  function setBoostVal(v){
+    const next = clone(diffCfg);
+    next.scoreBoostVal = Number(v);
+    applyDiffCfg(next);
+  }
+  if (elScoreBoostVal) elScoreBoostVal.addEventListener('input', e=>setBoostVal(e.target.value));
+  if (elScoreBoostValNum) elScoreBoostValNum.addEventListener('change', e=>setBoostVal(e.target.value));
+
+  // Advanced multipliers toggle (hides extra clutter)
+  if (elAdvBtn) elAdvBtn.addEventListener('click', ()=>{
+    const next = clone(diffCfg);
+    next.advanced = !next.advanced;
+    applyDiffCfg(next);
+    beep(next.advanced ? 880 : 520, 0.03);
+  });
+
+  function setThrMode(m){
+    const next = clone(diffCfg);
+    next.thrMode = (m==='mult' || m==='add') ? m : 'manual';
+    applyDiffCfg(next);
+  }
+  if (elThrModeManual) elThrModeManual.addEventListener('click', ()=>setThrMode('manual'));
+  if (elThrModeMult) elThrModeMult.addEventListener('click', ()=>setThrMode('mult'));
+  if (elThrModeAdd) elThrModeAdd.addEventListener('click', ()=>setThrMode('add'));
+
+  function setThrBase(v){
+    ensureSliderMax(elThrBase, v);
+    const next = clone(diffCfg);
+    next.thrBase = Math.max(0, Math.round(Number(v)||0));
+    applyDiffCfg(next);
+  }
+  if (elThrBase) elThrBase.addEventListener('input', e=>setThrBase(e.target.value));
+  if (elThrBaseNum) elThrBaseNum.addEventListener('change', e=>setThrBase(e.target.value));
+
+  if (elThrValsWrap){
+    for (let i=0;i<7;i++){
+      const s = document.getElementById(`thrVal_${i}`);
+      const n = document.getElementById(`thrValNum_${i}`);
+      if (!s || !n) continue;
+      function setThrVal(v){
+        ensureSliderMax(s, v);
+        const next = clone(diffCfg);
+        next.thrVals = (next.thrVals||[]).slice(0,7);
+        while (next.thrVals.length < 7) next.thrVals.push(next.thrVals.length+1);
+        next.thrVals[i] = Number(v);
+        applyDiffCfg(next);
+      }
+      s.addEventListener('input', e=>setThrVal(e.target.value));
+      n.addEventListener('change', e=>setThrVal(e.target.value));
+    }
+  }
+
+  syncDiffUI();
+
+  const ISO_C = 0.8660254038;
+  const ISO_S = 0.5;
+  const WORLD = { startSize:10, height:2, moveSpeed:9.5, baseRange:14, minRange:7.5, perfectEps:0.35, minPerfectEps:0.08, gravity:36, speedPerDiff:0.085, rangePerDiff:0.020, epsPerDiff:0.0026, gravityPerDiff:0.22 };
+
+  function scalePx(){ return Math.min(cw,ch)/28; }
+  function project(x,y,z,camY){
+    const s=scalePx();
+    const cx0=cw*0.5, cy0=ch*0.62;
+    const yy=y-camY;
+    return {
+      x: cx0 + (x-z)*s*ISO_C,
+      y: cy0 + (x+z)*s*ISO_S - yy*s*0.92
+    };
+  }
+  function hsl(h,s,l){ return `hsl(${h} ${s}% ${l}%)`; }
+  function blockColor(i){
+    const hue=(210+i*9)%360;
+    return { top:hsl(hue,78,58), left:hsl(hue,78,46), right:hsl(hue,78,40) };
+  }
+  function drawCuboid(x,y,z,w,d,h,colors,camY){
+    const x0=x-w/2, x1=x+w/2;
+    const z0=z-d/2, z1=z+d/2;
+    const yB=y, yT=y+h;
+
+    const p={
+      A:project(x0,yT,z0,camY), B:project(x1,yT,z0,camY),
+      C:project(x1,yT,z1,camY), D:project(x0,yT,z1,camY),
+      a:project(x0,yB,z0,camY), b:project(x1,yB,z0,camY),
+      c:project(x1,yB,z1,camY), d_:project(x0,yB,z1,camY)
+    };
+
+    ctx.beginPath(); ctx.moveTo(p.D.x,p.D.y); ctx.lineTo(p.C.x,p.C.y); ctx.lineTo(p.c.x,p.c.y); ctx.lineTo(p.d_.x,p.d_.y); ctx.closePath();
+    ctx.fillStyle=colors.left; ctx.fill();
+
+    ctx.beginPath(); ctx.moveTo(p.B.x,p.B.y); ctx.lineTo(p.C.x,p.C.y); ctx.lineTo(p.c.x,p.c.y); ctx.lineTo(p.b.x,p.b.y); ctx.closePath();
+    ctx.fillStyle=colors.right; ctx.fill();
+
+    ctx.beginPath(); ctx.moveTo(p.A.x,p.A.y); ctx.lineTo(p.B.x,p.B.y); ctx.lineTo(p.C.x,p.C.y); ctx.lineTo(p.D.x,p.D.y); ctx.closePath();
+    ctx.fillStyle=colors.top; ctx.fill();
+
+    ctx.globalAlpha=0.18;
+    ctx.strokeStyle='#fff';
+    ctx.lineWidth=1;
+    ctx.stroke();
+    ctx.globalAlpha=1;
+  }
+
+  const tierColors=['#36ffd8','#2f7bff','#7a46ff','#ff3bbd','#ff3b3b','#ff6a00','#8b0000'];
+  const skullCount=tierColors.length;
+
+  function getThresholds(){
+    if (diffCfg.thrMode === 'mult' || diffCfg.thrMode === 'add'){
+      const base = Math.max(0, Math.round(Number(diffCfg.thrBase)||0));
+      const vals = (diffCfg.thrVals||[]).slice(0,7);
+      const out = [];
+      let prev = 0;
+      for (let i=0;i<7;i++){
+        let raw = 0;
+        const v = Number(vals[i] ?? 0);
+        if (diffCfg.thrMode === 'mult'){
+          raw = base * (Number.isFinite(v) ? v : 0);
+        } else {
+          raw = base + (Number.isFinite(v) ? v : 0);
+        }
+        let t = Math.max(1, Math.round(raw));
+        if (i>0) t = Math.max(t, prev + 1);
+        out.push(t);
+        prev = t;
+      }
+      return out;
+    }
+    return diffCfg.thresholds;
+  }
+
+  function tierFromScore(s){
+    // Returns how many checkpoint thresholds have been reached: 0..segments
+    // There is NO skull at 0% (you start before the first checkpoint).
+    const t = (getThresholds() || []).slice(0, 7);
+    const segments = Math.max(1, t.length);
+
+    let reached = 0;
+    for (let i=0;i<t.length;i++){
+      if (s >= t[i]) reached = i + 1;
+      else break;
+    }
+    return clamp(reached, 0, segments);
+  }
+
+  function scoreProgress01(s){
+    // Fill position lines up with skull/tick dividers.
+    const t = (getThresholds() || []).slice(0, 7);
+    const segments = Math.max(1, t.length);
+
+    const reached = tierFromScore(s); // 0..segments
+    if (reached >= segments) return 1;
+
+    const prevScore = (reached === 0) ? 0 : (t[reached - 1] ?? 0);
+    const nextScore = t[reached] ?? (prevScore + 1);
+    const seg = (nextScore > prevScore) ? clamp((s - prevScore) / (nextScore - prevScore), 0, 1) : 1;
+
+    // If layout hasn't run yet, fall back to even spacing.
+    const pArr = (checkpointFractions && checkpointFractions.length === segments) ? checkpointFractions : null;
+
+    const prevPos = (reached === 0) ? 0 : (pArr ? (pArr[reached - 1] ?? (reached / segments)) : (reached / segments));
+    const nextPos = pArr ? (pArr[reached] ?? ((reached + 1) / segments)) : ((reached + 1) / segments);
+
+    return clamp(lerp(prevPos, nextPos, seg), 0, 1);
+  }
+
+
+  function difficultyPerScore(s){
+    const t=getThresholds();
+    const base=diffCfg.base;
+    const mult=diffCfg.mult;
+
+    let diff=0;
+    let prev=0;
+    for (let i=0;i<7;i++){
+      const end=t[i];
+      const segScores = clamp(s-prev,0,end-prev);
+      diff += segScores*base*mult[i];
+      prev=end;
+      if (s<end) return diff;
+    }
+    diff += Math.max(0,s-prev)*base*mult[6];
+    return diff;
+  }
+
+  // Score-only difficulty where skull tier boosts per-score gain
+  function difficultyPerScoreBoosted(s){
+    const t=getThresholds();
+    const base=diffCfg.base;
+    const mult=diffCfg.mult;
+    const boost = diffCfg.scoreBoostVal || 0;
+    const boostMode = diffCfg.scoreBoostMode || 'add';
+
+    let diff=0;
+    let prev=0;
+    for (let i=0;i<7;i++){
+      const end=t[i];
+      const segScores = clamp(s-prev,0,end-prev);
+
+      // tier index i: before skull2 = 0, after skull2 = 1, ...
+      let incPerScore;
+      if (boostMode === 'mult'){
+        incPerScore = base * (1 + i*boost);
+      }else{
+        incPerScore = base + i*boost;
+      }
+      diff += segScores * incPerScore * mult[i];
+      prev=end;
+      if (s<end) return diff;
+    }
+
+    const i=7;
+    let incPerScore;
+    if (boostMode === 'mult'){
+      incPerScore = base * (1 + i*boost);
+    }else{
+      incPerScore = base + i*boost;
+    }
+    diff += Math.max(0,s-prev) * incPerScore * mult[6];
+    return diff;
+  }
+
+  // additive skull difficulty (adds a fixed amount per skull checkpoint)
+  function difficultyPerCheckpointAdd(s){
+    const t=getThresholds();
+    const base=diffCfg.cpBase;
+    const mult=diffCfg.cpMult;
+
+    const tier = tierFromScore(s); // 0..7 based on score thresholds
+    let diff = 0;
+
+    // each checkpoint bumps difficulty once (skull2..skull8)
+    for (let i=0;i<tier;i++){
+      const seg = Math.min(6, i); // 0..6
+      diff += base * mult[seg];
+    }
+
+    // after skull8, add "virtual checkpoints" every last segment span
+    if (tier >= 7){
+      const span = Math.max(1, (t[6] - t[5]) || 8);
+      const extra = Math.max(0, s - t[6]);
+      const extraChecks = Math.floor(extra / span);
+      diff += extraChecks * base * mult[6];
+    }
+    return diff;
+  }
+
+  // multiplicative skull factor (multiplies difficulty at each skull checkpoint)
+  function skullDifficultyFactor(s){
+    const t=getThresholds();
+    const base=diffCfg.cpBase;
+    const mult=diffCfg.cpMult;
+
+    const tier = tierFromScore(s); // 0..7
+    let factor = 1;
+
+    for (let i=0;i<tier;i++){
+      const seg = Math.min(6, i);
+      const pct = base * mult[seg];
+      factor *= (1 + (pct/100));
+    }
+
+    if (tier >= 7){
+      const span = Math.max(1, (t[6] - t[5]) || 8);
+      const extra = Math.max(0, s - t[6]);
+      const extraChecks = Math.floor(extra / span);
+      if (extraChecks > 0){
+        const pct = base * mult[6];
+        factor *= Math.pow(1 + (pct/100), extraChecks);
+      }
+    }
+    return factor;
+  }
+
+  function difficultyValue(s){
+    const mode = diffCfg.mode || 'perScore';
+    const skullEffect = diffCfg.skullEffect || 'add';
+
+    const scorePart = (mode === 'boostedScore') ? difficultyPerScoreBoosted(s) : difficultyPerScore(s);
+
+    if (mode === 'perScore' || mode === 'boostedScore'){
+      return scorePart;
+    }
+
+    // skull-only
+    if (mode === 'perCheckpoint'){
+      if (skullEffect === 'mult'){
+        const base = 100;
+        return base * skullDifficultyFactor(s) - base;
+      }
+      return difficultyPerCheckpointAdd(s);
+    }
+
+    // score + skull
+    if (skullEffect === 'mult'){
+      const base = 100;
+      return (scorePart + base) * skullDifficultyFactor(s) - base;
+    }
+    return scorePart + difficultyPerCheckpointAdd(s);
+  }
+
+  function getDifficultyEffects() {
+    const dRaw = difficultyValue(score);              // can exceed 100
+    const dClamped = Math.min(5000, Math.max(0, dRaw));    // clamp for gameplay sanity (still respects big configs)
+    const speed = WORLD.moveSpeed + dClamped * WORLD.speedPerDiff;
+    const range = Math.max(WORLD.minRange, WORLD.baseRange - dClamped * WORLD.rangePerDiff);
+    const perfect = Math.max(WORLD.minPerfectEps, WORLD.perfectEps - dClamped * WORLD.epsPerDiff);
+    const gravity = WORLD.gravity + dClamped * WORLD.gravityPerDiff;
+    return { dRaw, dClamped, speed, range, perfect, gravity };
+  }
+
+  let state='ready';
+  let placed=[];
+  let falling=[];
+  let score=0;
+  let combo=0;
+  let axis='x';
+  let camY=0;
+  let current=null;
+
+  let difficultyShown=0;
+
+  function updateDifficultyUI(dt){
+    const d = difficultyValue(score);
+    difficultyShown = lerp(difficultyShown,d,1-Math.pow(0.001,dt));
+
+    elDifficultyLabel.textContent = `DIFFICULTY ${difficultyShown.toFixed(1)}%`;
+    elDifficultyFill.style.width = `${(scoreProgress01(score)*100).toFixed(3)}%`;
+
+    const reached = tierFromScore(score); // 0..segments
+    const segments = Math.max(1, (getThresholds() || []).slice(0,7).length);
+
+    // Fill color follows the skull you're moving TOWARD (changes as you enter each segment)
+    const targetIdx = Math.min(segments - 1, reached);
+    elDifficultyFill.style.setProperty('--fillColor', tierColors[targetIdx] || tierColors[tierColors.length-1]);
+
+    // Skull lighting:
+    // - before reaching first checkpoint: none lit, first skull is "current"
+    // - after reaching a checkpoint: that skull becomes "passed" (on), next skull becomes "current"
+    const currentIdx = (reached >= segments) ? (segments - 1) : reached;
+
+    for (const sEl of elSkulls){
+      const i = Number(sEl.dataset.i || 0);
+      sEl.classList.toggle('on', i < reached);
+      sEl.classList.toggle('current', i === currentIdx);
+    }
+
+    // Divider ticks mirror skull state
+    for (const tEl of elTicks){
+      const i = Number(tEl.dataset.i || 0);
+      tEl.classList.toggle('passed', i < reached);
+      tEl.classList.toggle('current', i === currentIdx);
+    }
+
+    const top = placed[placed.length-1];
+    const fx = getDifficultyEffects();
+    elDevScore.textContent = String(score);
+    elDevDifficulty.textContent = `${difficultyShown.toFixed(1)}%`;
+    elDevSize.textContent = `${top.w.toFixed(2)} × ${top.d.toFixed(2)}`;
+    elDevSpeed.textContent = fx.speed.toFixed(2);
+    elDevRange.textContent = fx.range.toFixed(2);
+    elDevPerfect.textContent = fx.perfect.toFixed(3);
+    elDevGravity.textContent = fx.gravity.toFixed(2);
+  }
+
+  function makeBlockFromPrev(prev,nextAxis){
+    const y=prev.y+WORLD.height;
+    const w=prev.w, d=prev.d;
+    const x=prev.x, z=prev.z;
+    const spawnOffset=14;
+    let bx=x, bz=z;
+    if (nextAxis==='x') bx=x-spawnOffset; else bz=z-spawnOffset;
+    const fx = getDifficultyEffects();
+    return { x:bx,y,z:bz,w,d,h:WORLD.height,axis:nextAxis,dir:+1,speed:fx.speed };
+  }
+
+  function reset(showOverlay=true){
+    state='ready';
+    score=0; combo=0; axis='x';
+    placed=[]; falling=[]; camY=0;
+
+    const base={ x:0,y:0,z:0,w:snap3(WORLD.startSize),d:snap3(WORLD.startSize),h:WORLD.height };
+    placed.push(base);
+    current=makeBlockFromPrev(base,axis);
+
+    elScore.textContent='0';
+    elDevScore.textContent='0';
+    elOverlay.style.display = showOverlay ? 'block' : 'none';
+
+    difficultyShown=0;
+    elDifficultyFill.style.width='0%';
+    elDifficultyFill.style.setProperty('--fillColor', tierColors[0]);
+    elDifficultyLabel.textContent='DIFFICULTY 0.0%';
+    for (const sEl of elSkulls) sEl.classList.remove('on','current');
+    for (const tEl of elTicks) tEl.classList.remove('passed','current');
+    }
+  reset(true);
+
+  function startIfReady(){
+    if (state==='ready'){
+      state='playing';
+      elOverlay.style.display='none';
+      beep(440,0.03);
+      elDevHint.classList.remove('show');
+    } else if (state==='gameover'){
+      reset(false);
+      state='playing';
+      beep(440,0.03);
+    }
+  }
+
+  function spawnFalling(x,y,z,w,d,dirX,dirZ){
+    const impulse=10.5;
+    falling.push({ x,y,z,w,d,h:WORLD.height, vx:dirX*impulse, vz:dirZ*impulse, vy:0, spin:(Math.random()*2-1)*1.6, rot:0, hueOffset:placed.length });
+  }
+
+  function gameOver(){
+    state='gameover';
+    combo=0;
+    beep(180,0.09,'sawtooth',0.05);
+    if (score>best){
+      best=score;
+      localStorage.setItem(BEST_KEY,String(best));
+    }
+    elBest.textContent=String(best);
+    elOverlay.style.display='block';
+  }
+
+  function placeCurrent(){
+    if (state!=='playing') return;
+    const prev=placed[placed.length-1];
+    const cur=current;
+    const isX=(cur.axis==='x');
+    const delta=isX ? (cur.x-prev.x) : (cur.z-prev.z);
+    const absDelta=Math.abs(delta);
+    const fx = getDifficultyEffects();
+    const perfectEps = fx.perfect;
+    const perfect = absDelta <= perfectEps;
+
+    if (perfect){
+      cur.x=snap3(prev.x); cur.z=snap3(prev.z);
+      cur.w=snap3(prev.w); cur.d=snap3(prev.d);
+    } else {
+      if (isX){
+        const curMin=cur.x-cur.w/2, curMax=cur.x+cur.w/2;
+        const prevMin=prev.x-prev.w/2, prevMax=prev.x+prev.w/2;
+        const left=Math.max(curMin,prevMin), right=Math.min(curMax,prevMax);
+        const newW=right-left;
+        if (newW<=0.0001){ spawnFalling(cur.x,cur.y,cur.z,cur.w,cur.d,0,0); gameOver(); return; }
+        const newX=(left+right)/2;
+
+        if (curMax>right+1e-6){
+          const chunkW=curMax-right; const chunkX=right+chunkW/2;
+          spawnFalling(chunkX,cur.y,cur.z,chunkW,cur.d,+1,0);
+        } else if (curMin<left-1e-6){
+          const chunkW=left-curMin; const chunkX=left-chunkW/2;
+          spawnFalling(chunkX,cur.y,cur.z,chunkW,cur.d,-1,0);
+        }
+        cur.w=snap3(newW); cur.x=snap3(newX);
+      } else {
+        const curMin=cur.z-cur.d/2, curMax=cur.z+cur.d/2;
+        const prevMin=prev.z-prev.d/2, prevMax=prev.z+prev.d/2;
+        const left=Math.max(curMin,prevMin), right=Math.min(curMax,prevMax);
+        const newD=right-left;
+        if (newD<=0.0001){ spawnFalling(cur.x,cur.y,cur.z,cur.w,cur.d,0,0); gameOver(); return; }
+        const newZ=(left+right)/2;
+
+        if (curMax>right+1e-6){
+          const chunkD=curMax-right; const chunkZ=right+chunkD/2;
+          spawnFalling(cur.x,cur.y,chunkZ,cur.w,chunkD,0,+1);
+        } else if (curMin<left-1e-6){
+          const chunkD=left-curMin; const chunkZ=left-chunkD/2;
+          spawnFalling(cur.x,cur.y,chunkZ,cur.w,chunkD,0,-1);
+        }
+        cur.d=snap3(newD); cur.z=snap3(newZ);
+      }
+    }
+
+    if (perfect){
+      combo++;
+      showToast('PERFECT!');
+      beep(880,0.045,'triangle',0.05);
+      if (combo>=3){
+        const fx2 = getDifficultyEffects();
+        const boost = Math.max(0.22, 0.6 - fx2.dClamped*0.0012);
+        cur.w = snap3(Math.min(WORLD.startSize, cur.w + boost));
+        cur.d = snap3(Math.min(WORLD.startSize, cur.d + boost));
+        combo = 0;
+      }
+    } else {
+      combo=0;
+      beep(520,0.03,'sine',0.035);
+    }
+
+    placed.push({ x:snap3(cur.x), y:snap3(cur.y), z:snap3(cur.z), w:snap3(cur.w), d:snap3(cur.d), h:cur.h });
+
+    score++;
+    elScore.textContent=String(score);
+
+    axis = (cur.axis==='x') ? 'z' : 'x';
+    current = makeBlockFromPrev(placed[placed.length-1], axis);
+  }
+
+  function onAction(){
+    if (devOpen) return;
+    if (state!=='playing'){ startIfReady(); return; }
+    placeCurrent();
+  }
+
+  window.addEventListener('keydown', (e)=>{
+    if (e.code==='Equal'){ e.preventDefault(); setDev(!devOpen); return; }
+    if (e.code==='Escape' && devOpen){ e.preventDefault(); setDev(false); return; }
+    if (e.code==='Space' || e.code==='Enter'){ e.preventDefault(); onAction(); }
+    if (e.code==='KeyR') reset(false);
+  });
+
+  window.addEventListener('pointerdown', (e)=>{
+    if (devOpen) return;
+    e.preventDefault();
+    onAction();
+  }, {passive:false});
+
+  function update(dt){
+    if (state==='playing' && current){
+      const cur=current;
+      const prev=placed[placed.length-1];
+      const fx = getDifficultyEffects();
+      cur.speed = fx.speed; // live apply difficulty to speed
+      const range = fx.range;
+      if (cur.axis==='x'){
+        cur.x += cur.dir*cur.speed*dt;
+        if (cur.x>prev.x+range) cur.dir=-1;
+        if (cur.x<prev.x-range) cur.dir=+1;
+      } else {
+        cur.z += cur.dir*cur.speed*dt;
+        if (cur.z>prev.z+range) cur.dir=-1;
+        if (cur.z<prev.z-range) cur.dir=+1;
+      }
+    }
+
+    for (const f of falling){
+      f.vy -= getDifficultyEffects().gravity*dt;
+      f.x += f.vx*dt;
+      f.z += f.vz*dt;
+      f.y += f.vy*dt;
+      f.rot += f.spin*dt;
+    }
+    falling = falling.filter(f=>f.y>-80);
+
+    const top=placed[placed.length-1];
+    const yT=top.y+top.h;
+
+    const s=scalePx();
+    const k=s*0.92;
+    const cy0=ch*0.62;
+    const desired=ch*0.58;
+    const xzTerm=(top.x+top.z)*s*ISO_S;
+
+    let camTarget = yT - (cy0 + xzTerm - desired)/k;
+    camTarget = Math.max(0, camTarget);
+    camY = lerp(camY, camTarget, 1 - Math.pow(0.001, dt));
+
+    updateDifficultyUI(dt);
+  }
+
+  function drawBackground(){
+    const g=ctx.createLinearGradient(0,0,0,ch);
+    g.addColorStop(0,'#0b1020');
+    g.addColorStop(1,'#05070c');
+    ctx.fillStyle=g;
+    ctx.fillRect(0,0,cw,ch);
+
+    ctx.globalAlpha=0.08;
+    for (let i=0;i<80;i++){
+      const x=(i*97)%cw;
+      const y=(i*173)%ch;
+      ctx.fillStyle='#fff';
+      ctx.fillRect(x,y,1,1);
+    }
+    ctx.globalAlpha=1;
+  }
+
+  function draw(){
+    drawBackground();
+
+    const base=placed[0];
+    const s=scalePx();
+    const p0=project(base.x,0,base.z,camY);
+    ctx.beginPath();
+    ctx.ellipse(p0.x, p0.y + s*5, s*6.8, s*2.6, 0, 0, Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,.35)';
+    ctx.fill();
+
+    for (let i=0;i<placed.length;i++){
+      const b=placed[i];
+      const col=blockColor(i);
+      drawCuboid(b.x,b.y,b.z,b.w,b.d,b.h,col,camY);
+    }
+
+    if (current && state!=='gameover'){
+      const i=placed.length;
+      const col=blockColor(i);
+      col.top=hsl((210+i*9)%360,82,62);
+      drawCuboid(current.x,current.y,current.z,current.w,current.d,current.h,col,camY);
+    }
+
+    for (let i=0;i<falling.length;i++){
+      const f=falling[i];
+      const col=blockColor(f.hueOffset+i);
+      const wob=Math.sin(f.rot)*0.25;
+      drawCuboid(f.x+wob,f.y,f.z-wob,f.w,f.d,f.h,col,camY);
+    }
+
+    const vg=ctx.createRadialGradient(cw*0.5,ch*0.55,Math.min(cw,ch)*0.2, cw*0.5,ch*0.55,Math.min(cw,ch)*0.75);
+    vg.addColorStop(0,'rgba(0,0,0,0)');
+    vg.addColorStop(1,'rgba(0,0,0,.35)');
+    ctx.fillStyle=vg;
+    ctx.fillRect(0,0,cw,ch);
+  }
+
+  let last=performance.now();
+  function loop(now){
+    const dt=clamp((now-last)/1000,0,0.033);
+    last=now;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  document.addEventListener('gesturestart', e=>e.preventDefault(), {passive:false});
+  // ===== Unified Difficulty System (overrides legacy difficulty math + meter) =====
+  const UDIFF_KEY = 'stacked_unified_diff_v1';
+
+  const uElBaseInc = document.getElementById('uBaseInc');
+  const uElBaseIncNum = document.getElementById('uBaseIncNum');
+  const uElThreshWrap = document.getElementById('uThreshWrap');
+
+  const uElSkModeOff = document.getElementById('uSkModeOff');
+  const uElSkModeAdd = document.getElementById('uSkModeAdd');
+  const uElSkModeMult = document.getElementById('uSkModeMult');
+  const uElSkModeLabel = document.getElementById('uSkModeLabel');
+
+  const uElSkTargetWrap = document.getElementById('uSkTargetWrap');
+  const uElSkTargetDifficulty = document.getElementById('uSkTargetDifficulty');
+  const uElSkTargetRate = document.getElementById('uSkTargetRate');
+  const uElSkTargetLabel = document.getElementById('uSkTargetLabel');
+
+  const uElSkValsBlock = document.getElementById('uSkValsBlock');
+  const uElSkValsWrap = document.getElementById('uSkValsWrap');
+  const uElSkValsTitle = document.getElementById('uSkValsTitle');
+
+  // skullCount already exists in this file (tierColors.length). Ensure it's sane.
+  // Checkpoint skull count comes from the actual meter DOM (no hidden baseline skull at 0%).
+  const U_SKULLS = Math.max(1, elSkulls.length);
+  const U_THRESH = U_SKULLS;   // one score threshold per checkpoint skull
+  const U_SEGS   = U_SKULLS;   // bar segments shown (start -> each checkpoint)
+  const U_COLORS = Array.from({length: U_SKULLS}, (_,i)=>{
+    const v = (elSkulls[i]?.style?.getPropertyValue('--c') || '').trim();
+    return v || tierColors[i] || tierColors[tierColors.length-1] || '#36ffd8';
+  });
+const uDefaults = {
+    basePerScore: 0.50,
+    thresholds: Array.from({length: U_THRESH}, (_,i)=> (i+1)*8), // score needed for each checkpoint skull
+    skullMode: 'off',        // 'off' | 'add' | 'mult'
+    skullTarget: 'difficulty',// 'difficulty' | 'rate'
+    skullVals: Array.from({length: U_SKULLS}, ()=> 0),
+  };
+
+  function uClone(v){ return JSON.parse(JSON.stringify(v)); }
+
+  function uSanitize(cfg){
+    const out = uClone(uDefaults);
+    if (cfg && typeof cfg === 'object'){
+      out.basePerScore = Math.max(0, Number(cfg.basePerScore ?? out.basePerScore) || 0);
+      const t = Array.isArray(cfg.thresholds) ? cfg.thresholds.map(x=>Math.max(1, Math.floor(Number(x)||1))) : out.thresholds.slice();
+      // ensure length
+      while (t.length < U_THRESH) t.push((t.length+1)*8);
+      t.length = U_THRESH;
+      // strictly increasing
+      for (let i=0;i<t.length;i++){
+        if (i===0) t[i] = Math.max(1, t[i]);
+        else t[i] = Math.max(t[i], t[i-1]+1);
+      }
+      out.thresholds = t;
+
+      const sm = String(cfg.skullMode || out.skullMode);
+      out.skullMode = (sm==='add'||sm==='mult'||sm==='off') ? sm : 'off';
+
+      const st = String(cfg.skullTarget || out.skullTarget);
+      out.skullTarget = (st==='difficulty'||st==='rate') ? st : 'difficulty';
+
+      const vals = Array.isArray(cfg.skullVals) ? cfg.skullVals.map(x=>Number(x)||0) : out.skullVals.slice();
+      while (vals.length < U_SKULLS) vals.push(0);
+      vals.length = U_SKULLS;
+
+      if (out.skullMode === 'mult'){
+        // Multipliers must be positive; default neutral is 1.0
+        for (let i=0;i<vals.length;i++){
+          const v = Number(vals[i]);
+          vals[i] = (isFinite(v) && v > 0) ? v : 1.0;
+        }
+      }
+      out.skullVals = vals;
+    }
+    return out;
+  }
+
+  function uLoad(){
+    try{
+      const raw = localStorage.getItem(UDIFF_KEY);
+      if (!raw) return uSanitize(null);
+      return uSanitize(JSON.parse(raw));
+    }catch(e){
+      return uSanitize(null);
+    }
+  }
+  function uSave(){
+    try{ localStorage.setItem(UDIFF_KEY, JSON.stringify(uCfg)); }catch(e){}
+  }
+
+  let uCfg = uLoad();
+
+  // --- Build UI rows ---
+  const uThrInputs = [];
+  function buildThresholdUI(){
+    uElThreshWrap.innerHTML = '';
+    for (let i=0;i<U_THRESH;i++){
+      const row = document.createElement('div');
+      row.className = 'uSkRow';
+      row.innerHTML = `
+        <div class="devRow"><span>Skull ${i+1}</span><span></span></div>
+        <div class="devField">
+          <label for="uThr_${i}">Score needed</label>
+          <input class="devNum" id="uThr_${i}" type="number" min="1" step="1" value="${uCfg.thresholds[i]}">
+        </div>
+      `;
+      uElThreshWrap.appendChild(row);
+      const inp = row.querySelector('input');
+      uThrInputs.push(inp);
+      inp.addEventListener('change', ()=>{
+        uCfg.thresholds[i] = Math.max(1, Math.floor(Number(inp.value)||1));
+        uCfg = uSanitize(uCfg);
+        uSyncUI();
+        uSave();
+      });
+    }
+  }
+
+  const uSkNum = [];
+  const uSkSlider = [];
+  function buildSkullValsUI(){
+    uElSkValsWrap.innerHTML = '';
+    uSkNum.length = 0; uSkSlider.length = 0;
+    for (let i=0;i<U_SKULLS;i++){
+      const row = document.createElement('div');
+      row.className = 'uSkRow';
+      row.innerHTML = `
+        <div class="devRow"><span>Skull ${i+1}</span><span></span></div>
+        <div class="devField">
+          <label for="uSkNum_${i}" class="uValLabel">Value</label>
+          <input class="devNum" id="uSkNum_${i}" type="number" step="0.05" value="0">
+        </div>
+        <input class="devSlider" id="uSkSl_${i}" type="range" min="0" max="5000" step="0.05" value="0">
+      `;
+      uElSkValsWrap.appendChild(row);
+      const n = row.querySelector(`#uSkNum_${i}`);
+      const s = row.querySelector(`#uSkSl_${i}`);
+      uSkNum.push(n); uSkSlider.push(s);
+
+      const applyVal = (v)=>{
+        uCfg.skullVals[i] = Number(v)||0;
+        uCfg = uSanitize(uCfg);
+        uSyncUI();
+        uSave();
+      };
+      n.addEventListener('change', ()=>applyVal(n.value));
+      s.addEventListener('input', ()=>{
+        n.value = s.value;
+        applyVal(s.value);
+      });
+    }
+  }
+
+  function setActiveBtn(btns, active){
+    for (const b of btns) b.classList.toggle('on', b===active);
+  }
+
+  function setSkMode(mode){
+    uCfg.skullMode = mode;
+    if (mode === 'off'){
+      uElSkTargetWrap.style.display = 'none';
+      uElSkValsBlock.style.display = 'none';
+    } else {
+      uElSkTargetWrap.style.display = 'block';
+      uElSkValsBlock.style.display = 'block';
+    }
+    if (mode === 'mult'){
+      // make neutral multipliers visible
+      for (let i=0;i<uCfg.skullVals.length;i++){
+        if (!isFinite(uCfg.skullVals[i]) || uCfg.skullVals[i] <= 0) uCfg.skullVals[i] = 1.0;
+      }
+    }
+    uCfg = uSanitize(uCfg);
+    uSyncUI();
+    uSave();
+  }
+
+  function setSkTarget(target){
+    uCfg.skullTarget = target;
+    uCfg = uSanitize(uCfg);
+    uSyncUI();
+    uSave();
+  }
+
+  // --- Unified difficulty math ---
+  function uTierFromScore(s){
+    const t = uCfg.thresholds;
+    let reached = 0;
+    for (let i=0;i<t.length;i++){
+      if (s >= t[i]) reached++;
+      else break;
+    }
+    // reached: 0..U_SKULLS
+    return reached;
+  }
+
+  function uScoreProgress01(s){
+    // Progress aligns to the actual checkpoint positions (skulls + divider ticks),
+    // including the pushed-in first checkpoint (you do NOT start at Skull 1).
+    const reached = uTierFromScore(s); // 0..U_THRESH
+    if (reached >= U_THRESH) return 1;
+
+    const prevScore = (reached === 0) ? 0 : (uCfg.thresholds[reached-1] ?? 0);
+    const nextScore = uCfg.thresholds[reached] ?? (prevScore + 1);
+    const seg = (nextScore > prevScore) ? clamp((s - prevScore) / (nextScore - prevScore), 0, 1) : 1;
+
+    const pArr = (checkpointFractions && checkpointFractions.length === U_SKULLS) ? checkpointFractions : null;
+
+    const prevPos = (reached === 0)
+      ? 0
+      : (pArr ? (pArr[reached - 1] ?? (reached / U_SEGS)) : (reached / U_SEGS));
+
+    const nextPos = pArr
+      ? (pArr[reached] ?? ((reached + 1) / U_SEGS))
+      : ((reached + 1) / U_SEGS);
+
+    return clamp(lerp(prevPos, nextPos, seg), 0, 1);
+  }
+
+  function uDifficultyValue(s){
+    const t = uCfg.thresholds;
+    let rate = uCfg.basePerScore;
+    let diff = 0;
+    let prev = 0;
+
+    const reached = uTierFromScore(s);
+    // simulate segments up to reached skulls
+    for (let i=0;i<Math.min(reached, U_THRESH);i++){
+      const end = t[i];
+      const segLen = Math.max(0, end - prev);
+      diff += segLen * rate;
+      prev = end;
+
+      const v = Number(uCfg.skullVals[i]) || 0;
+
+      if (uCfg.skullMode === 'add'){
+        if (uCfg.skullTarget === 'difficulty') diff += v;
+        else rate += v;
+      } else if (uCfg.skullMode === 'mult'){
+        const f = (isFinite(v) && v > 0) ? v : 1.0;
+        if (uCfg.skullTarget === 'difficulty') diff *= f;
+        else rate *= f;
+      }
+    }
+    // remaining scores after last reached skull
+    diff += Math.max(0, s - prev) * rate;
+    return diff;
+  }
+
+  // Override legacy functions by reassigning them.
+  tierFromScore = uTierFromScore;
+  scoreProgress01 = uScoreProgress01;
+  difficultyValue = uDifficultyValue;
+
+  // Replace updateDifficultyUI to match the meter (Skull[0] is baseline at the start).
+  // reached = number of thresholds passed (0..U_SEGS); current skull index = reached.
+  updateDifficultyUI = function(){
+    const reached = tierFromScore(score); // checkpoints passed: 0..U_THRESH
+    const diffVal = difficultyValue(score);
+    difficultyShown = lerp(difficultyShown, diffVal, 0.12);
+
+    // Fill + color (color follows the checkpoint you're moving toward)
+    const progress = scoreProgress01(score);
+    elDifficultyFill.style.width = `${(progress*100).toFixed(3)}%`;
+
+    const currentIdx = (reached >= U_SKULLS) ? (U_SKULLS - 1) : reached;
+    const targetIdx  = Math.min(U_SKULLS - 1, reached);
+    const curColor = U_COLORS[targetIdx] || U_COLORS[U_COLORS.length-1] || tierColors[0];
+    elDifficultyFill.style.setProperty('--fillColor', curColor);
+
+    // Label
+    elDifficultyLabel.textContent = `DIFFICULTY ${difficultyShown.toFixed(1)}%`;
+
+    // Skulls + divider ticks:
+    // - before reaching first checkpoint: none passed, Skull 1 is "current/upcoming"
+    // - after reaching a checkpoint: that skull becomes passed, next skull becomes current
+    for (let i=0;i<elSkulls.length;i++){
+      const sEl = elSkulls[i];
+      sEl.classList.toggle('on', i < reached);
+      sEl.classList.toggle('current', i === currentIdx);
+    }
+    for (let i=0;i<elTicks.length;i++){
+      const tEl = elTicks[i];
+      tEl.classList.toggle('passed', i < reached);
+      tEl.classList.toggle('current', i === currentIdx);
+    }
+
+    // Dev panel stats (keep same as original)
+    const top = placed[placed.length-1];
+    const fx = getDifficultyEffects();
+    elDevScore.textContent = String(score);
+    elDevDifficulty.textContent = `${difficultyShown.toFixed(1)}%`;
+    elDevSize.textContent = `${top.w.toFixed(2)} × ${top.d.toFixed(2)}`;
+    elDevSpeed.textContent = fx.speed.toFixed(2);
+    elDevRange.textContent = fx.range.toFixed(2);
+    elDevPerfect.textContent = fx.perfect.toFixed(3);
+    elDevGravity.textContent = fx.gravity.toFixed(2);
+  };
+
+  function uSyncUI(){
+    // base per score
+    if (uElBaseInc) uElBaseInc.value = String(uCfg.basePerScore);
+    if (uElBaseIncNum) uElBaseIncNum.value = String(uCfg.basePerScore);
+
+    // thresholds
+    for (let i=0;i<uThrInputs.length;i++){
+      uThrInputs[i].value = String(uCfg.thresholds[i]);
+    }
+
+    // mode buttons
+    setActiveBtn([uElSkModeOff,uElSkModeAdd,uElSkModeMult],
+      uCfg.skullMode==='off'?uElSkModeOff:uCfg.skullMode==='add'?uElSkModeAdd:uElSkModeMult);
+    uElSkModeLabel.textContent =
+      (uCfg.skullMode==='off') ? 'Off' : (uCfg.skullMode==='add') ? 'Additive' : 'Multiplicative';
+
+    // target buttons + labels
+    uElSkTargetWrap.style.display = (uCfg.skullMode==='off') ? 'none' : 'block';
+    uElSkValsBlock.style.display = (uCfg.skullMode==='off') ? 'none' : 'block';
+
+    const mode = uCfg.skullMode;
+    const isAdd = mode==='add';
+    const isMult = mode==='mult';
+
+    uElSkTargetDifficulty.textContent = isMult ? '× Difficulty' : '+ Difficulty';
+    uElSkTargetRate.textContent       = isMult ? '× Per-score gain' : '+ Per-score gain';
+
+    setActiveBtn([uElSkTargetDifficulty,uElSkTargetRate],
+      uCfg.skullTarget==='difficulty' ? uElSkTargetDifficulty : uElSkTargetRate);
+    uElSkTargetLabel.textContent = (uCfg.skullTarget==='difficulty') ? 'Current difficulty' : 'Difficulty gain per score';
+
+    // values UI
+    const title =
+      (mode==='off') ? 'Values per Skull' :
+      (isAdd && uCfg.skullTarget==='difficulty') ? 'Add to difficulty when Skull is reached (% points)' :
+      (isAdd && uCfg.skullTarget==='rate')       ? 'Add to per-score difficulty gain from this Skull onward (% / stack)' :
+      (isMult && uCfg.skullTarget==='difficulty')? 'Multiply difficulty when Skull is reached (factor)' :
+      'Multiply per-score difficulty gain from this Skull onward (factor)';
+    uElSkValsTitle.textContent = title;
+
+    for (let i=0;i<uSkNum.length;i++){
+      const n = uSkNum[i], s = uSkSlider[i];
+      let v = uCfg.skullVals[i];
+
+      if (isMult){
+        n.step = '0.01';
+        s.step = '0.01';
+        s.min = '0.01';
+        // dynamic max
+        const want = Math.max(2, Number(v)||1);
+        s.max = String(Math.max(Number(s.max||10), want*2));
+        if (!isFinite(v) || v<=0) v = 1.0;
+      } else {
+        n.step = '0.05';
+        s.step = '0.05';
+        s.min = '-5000';
+        s.max = '5000';
+      }
+
+      n.value = String(v);
+      // keep slider in range; if out of range, extend max
+      if (isMult && Number(v) > Number(s.max)) s.max = String(Number(v)*2);
+      s.value = String(v);
+    }
+
+    // preview line
+    const preview =
+      `Base: +${uCfg.basePerScore.toFixed(2)}%/stack • Skull: ` +
+      (mode==='off' ? 'none' :
+       (mode==='add' ? (uCfg.skullTarget==='difficulty' ? 'add to difficulty' : 'add to per-score gain')
+                     : (uCfg.skullTarget==='difficulty' ? 'multiply difficulty' : 'multiply per-score gain')));
+    const prevEl = document.getElementById('segIncPreview');
+    if (prevEl) prevEl.textContent = preview;
+  }
+
+  // --- Wire unified inputs ---
+  if (uElBaseInc){
+    uElBaseInc.addEventListener('input', ()=>{
+      uElBaseIncNum.value = uElBaseInc.value;
+      uCfg.basePerScore = Number(uElBaseInc.value) || 0;
+      uCfg = uSanitize(uCfg);
+      uSyncUI();
+      uSave();
+    });
+  }
+  if (uElBaseIncNum){
+    uElBaseIncNum.addEventListener('change', ()=>{
+      uCfg.basePerScore = Math.max(0, Number(uElBaseIncNum.value) || 0);
+      uCfg = uSanitize(uCfg);
+      uSyncUI();
+      uSave();
+    });
+  }
+
+  uElSkModeOff.addEventListener('click', ()=>setSkMode('off'));
+  uElSkModeAdd.addEventListener('click', ()=>setSkMode('add'));
+  uElSkModeMult.addEventListener('click', ()=>setSkMode('mult'));
+
+  uElSkTargetDifficulty.addEventListener('click', ()=>setSkTarget('difficulty'));
+  uElSkTargetRate.addEventListener('click', ()=>setSkTarget('rate'));
+
+  // Hook reset buttons (existing IDs)
+  const uResetBtn = document.getElementById('diffResetBtn');
+  if (uResetBtn){
+    uResetBtn.addEventListener('click', ()=>{
+      uCfg = uSanitize(null);
+      uSyncUI();
+      uSave();
+    });
+  }
+  const uResetAllBtn = document.getElementById('resetAllBtn');
+  if (uResetAllBtn){
+    uResetAllBtn.addEventListener('click', ()=>{
+      uCfg = uSanitize(null);
+      uSyncUI();
+      uSave();
+    });
+  }
+
+  // Build and sync
+  buildThresholdUI();
+  buildSkullValsUI();
+  uSyncUI();
+
+  // --- Presets (save/load/delete unified difficulty settings) ---
+  const PRESET_KEY = 'stacked_unified_presets_v1';
+  const elPresetName = document.getElementById('presetName');
+  const elPresetSelect = document.getElementById('presetSelect');
+  const elPresetSave = document.getElementById('presetSaveBtn');
+  const elPresetLoad = document.getElementById('presetLoadBtn');
+  const elPresetDelete = document.getElementById('presetDeleteBtn');
+
+  function loadPresets(){
+    try{
+      const raw = localStorage.getItem(PRESET_KEY);
+      if (!raw) return {};
+      const obj = JSON.parse(raw);
+      return (obj && typeof obj === 'object') ? obj : {};
+    }catch(e){
+      return {};
+    }
+  }
+  function savePresets(obj){
+    try{ localStorage.setItem(PRESET_KEY, JSON.stringify(obj)); }catch(e){}
+  }
+  function sanitizePresetName(name){
+    name = String(name || '').trim();
+    name = name.replace(/\s+/g, ' ');
+    if (name.length > 32) name = name.slice(0, 32);
+    return name;
+  }
+  function refreshPresetUI(selectName){
+    if (!elPresetSelect) return;
+    const presets = loadPresets();
+    const names = Object.keys(presets).sort((a,b)=>a.localeCompare(b, undefined, {sensitivity:'base'}));
+    elPresetSelect.innerHTML = '';
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = names.length ? 'Select a preset…' : 'No presets saved yet';
+    elPresetSelect.appendChild(none);
+
+    for (const n of names){
+      const opt = document.createElement('option');
+      opt.value = n;
+      opt.textContent = n;
+      elPresetSelect.appendChild(opt);
+    }
+
+    const target = selectName || '';
+    if (target && names.includes(target)) elPresetSelect.value = target;
+  }
+
+  refreshPresetUI('');
+
+  if (elPresetSave){
+    elPresetSave.addEventListener('click', ()=>{
+      const name = sanitizePresetName(elPresetName ? elPresetName.value : '');
+      if (!name) { beep(240, 0.05); return; }
+      const presets = loadPresets();
+      presets[name] = uClone(uCfg); // save unified diff config
+      savePresets(presets);
+      if (elPresetName) elPresetName.value = name;
+      refreshPresetUI(name);
+      beep(880, 0.03);
+    });
+  }
+
+  if (elPresetLoad){
+    elPresetLoad.addEventListener('click', ()=>{
+      const pick = elPresetSelect ? elPresetSelect.value : '';
+      if (!pick) { beep(240, 0.05); return; }
+      const presets = loadPresets();
+      if (!presets[pick]) { beep(240, 0.05); refreshPresetUI(''); return; }
+      uCfg = uSanitize(presets[pick]);
+      uSyncUI();
+      uSave();
+      beep(660, 0.03);
+    });
+  }
+
+  if (elPresetDelete){
+    elPresetDelete.addEventListener('click', ()=>{
+      const pick = elPresetSelect ? elPresetSelect.value : '';
+      if (!pick) { beep(240, 0.05); return; }
+      const presets = loadPresets();
+      if (presets[pick]){
+        delete presets[pick];
+        savePresets(presets);
+        refreshPresetUI('');
+        beep(420, 0.03);
+      }else{
+        beep(240, 0.05);
+      }
+    });
+  }
+
+})();
+</script>
+</body>
+</html>
