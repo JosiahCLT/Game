@@ -638,7 +638,6 @@ width: 3px;
   font-weight:900;
   outline:none;
 }
-.wagerBtn,
 .backBtn,
 .startRoundBtn{
   border:1px solid rgba(255,255,255,.16);
@@ -722,8 +721,7 @@ width: 3px;
           <div class="menuSectionTitle">Custom Wager</div>
           <div class="wagerBox" id="wagerBox">
             <input class="wagerAmountInput" id="wagerAmountInput" type="number" min="1" step="1" placeholder="Enter wager amount" />
-            <button class="wagerBtn" id="createWagerBtn">Create Wager</button>
-          </div>
+                      </div>
         </div>
 
         <div class="playMenuActions">
@@ -1049,7 +1047,6 @@ width: 3px;
   const openPlayMenuBtn = document.getElementById('openPlayMenuBtn');
   const backToLobbyBtn = document.getElementById('backToLobbyBtn');
   const startRoundBtn = document.getElementById('startRoundBtn');
-  const createWagerBtn = document.getElementById('createWagerBtn');
   const quickPlayTabBtn = document.getElementById('quickPlayTabBtn');
   const wagerTabBtn = document.getElementById('wagerTabBtn');
   const quickPlayPanel = document.getElementById('quickPlayPanel');
@@ -2034,6 +2031,7 @@ for (let i=0;i<7;i++){
   let state='ready';
   let appMode='lobby'; // 'lobby' | 'playMenu' | 'game'
   let selectedStake=1;
+  let playMode='quick'; // 'quick' | 'wager'
   let scBalance=1250.00;
 
   function setMenuScreen(which){
@@ -2052,6 +2050,21 @@ for (let i=0;i<7;i++){
     if (scBalanceInline) scBalanceInline.textContent = txt;
   }
 
+  function getWagerAmount(){
+    const raw = wagerAmountInput ? Number(wagerAmountInput.value) : 0;
+    return (Number.isFinite(raw) && raw > 0) ? raw : 0;
+  }
+
+  function refreshPrimaryActionLabel(){
+    if (!startRoundBtn) return;
+    if (playMode === 'wager'){
+      const wagerVal = getWagerAmount();
+      startRoundBtn.textContent = wagerVal > 0 ? `Create $${wagerVal} Wager` : 'Create Wager';
+    } else {
+      startRoundBtn.textContent = `Start Round ($${selectedStake})`;
+    }
+  }
+
   function setStake(stake){
     selectedStake = stake;
     if (stakeGrid){
@@ -2060,7 +2073,7 @@ for (let i=0;i<7;i++){
         btn.classList.toggle('active', v === selectedStake);
       }
     }
-    if (startRoundBtn) startRoundBtn.textContent = `Start Round ($${selectedStake})`;
+    refreshPrimaryActionLabel();
   }
 
   let placed=[];
@@ -2149,6 +2162,7 @@ for (let i=0;i<7;i++){
     }
   reset(false);
   syncSCBalance();
+  setPlayMode('quick');
   setStake(selectedStake);
   setMenuScreen('lobby');
 
@@ -2290,28 +2304,30 @@ for (let i=0;i<7;i++){
   });
 
   if (startRoundBtn) startRoundBtn.addEventListener('click', ()=>{
+    if (playMode === 'wager'){
+      const wagerVal = getWagerAmount() || selectedStake;
+      showToast(`CREATE $${wagerVal} WAGER (PLACEHOLDER)`);
+      beep(700, 0.03, 'triangle', 0.03);
+      return;
+    }
     setMenuScreen('game');
     reset(false);
     startIfReady();
   });
 
   function setPlayMode(mode){
-    const onQuick = mode === 'quick';
+    playMode = (mode === 'wager') ? 'wager' : 'quick';
+    const onQuick = playMode === 'quick';
     if (quickPlayTabBtn) quickPlayTabBtn.classList.toggle('active', onQuick);
     if (wagerTabBtn) wagerTabBtn.classList.toggle('active', !onQuick);
     if (quickPlayPanel) quickPlayPanel.classList.toggle('active', onQuick);
     if (wagerPanel) wagerPanel.classList.toggle('active', !onQuick);
+    refreshPrimaryActionLabel();
   }
 
   if (quickPlayTabBtn) quickPlayTabBtn.addEventListener('click', ()=>setPlayMode('quick'));
   if (wagerTabBtn) wagerTabBtn.addEventListener('click', ()=>setPlayMode('wager'));
-
-  if (createWagerBtn) createWagerBtn.addEventListener('click', ()=>{
-    const raw = wagerAmountInput ? Number(wagerAmountInput.value) : 0;
-    const wagerVal = Number.isFinite(raw) && raw > 0 ? raw : selectedStake;
-    showToast(`CREATE WAGER $${wagerVal} (PLACEHOLDER)`);
-    beep(700, 0.03, 'triangle', 0.03);
-  });
+  if (wagerAmountInput) wagerAmountInput.addEventListener('input', refreshPrimaryActionLabel);
 
   if (stakeGrid){
     stakeGrid.addEventListener('click', (e)=>{
