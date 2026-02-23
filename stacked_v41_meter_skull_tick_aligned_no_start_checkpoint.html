@@ -242,8 +242,8 @@ width: 3px;
     }
 
     @keyframes skullPulse{
-      0%,100%{ transform: scale(1.02); }
-      50%{ transform: scale(1.07); }
+      0%,100%{ transform: translate(-50%, 0) scale(1.02); }
+      50%{ transform: translate(-50%, 0) scale(1.07); }
     }
 
     .scoreWrap{ margin-top: 10px; pointer-events:none; user-select:none; }
@@ -457,10 +457,215 @@ width: 3px;
   padding:10px 12px;
   outline:none;
 }
+
+
+/* --- Lobby + Play Menu UI --- */
+.menuLayer{
+  position:fixed;
+  inset:0;
+  z-index:30;
+  pointer-events:none;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+}
+.menuScreen{
+  position:absolute;
+  inset:0;
+  display:none;
+  pointer-events:auto;
+  background: linear-gradient(180deg, rgba(5,9,16,.80), rgba(4,7,13,.90));
+  backdrop-filter: blur(5px);
+}
+.menuScreen.show{ display:flex; flex-direction:column; }
+.menuTop{
+  display:flex;
+  justify-content:center;
+  padding: calc(env(safe-area-inset-top) + 16px) 16px 12px;
+  position:relative;
+}
+.menuTopMiddle{ display:flex; gap:10px; }
+.menuTopBtn{
+  border:1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.08);
+  color:#fff;
+  border-radius:999px;
+  font-weight:900;
+  letter-spacing:.3px;
+  padding:9px 14px;
+}
+.menuTopBtn:active{ transform: translateY(1px); }
+.balanceChip{
+  position:absolute;
+  right:16px;
+  top: calc(env(safe-area-inset-top) + 14px);
+  display:flex;
+  align-items:center;
+  gap:8px;
+  border:1px solid rgba(86,255,173,.42);
+  background: rgba(18,57,34,.66);
+  color:#d6ffe8;
+  font-weight:900;
+  border-radius:999px;
+  padding:8px 12px;
+}
+.scCoin{
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  background:#30e377;
+  color:#043114;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-size:12px;
+  font-weight:1000;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 0 14px rgba(48,227,119,.35);
+}
+.menuBody{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding: 20px 16px;
+  gap: 14px;
+}
+.menuTitle{ font-size: clamp(34px, 9vw, 64px); font-weight:1000; letter-spacing:.9px; text-shadow:0 14px 38px rgba(0,0,0,.52); }
+.menuSub{ opacity:.86; font-weight:760; }
+.menuBottom{
+  padding: 12px 16px calc(env(safe-area-inset-bottom) + 20px);
+  display:flex;
+  justify-content:center;
+}
+.playCta{
+  border:1px solid rgba(255,255,255,.20);
+  background: linear-gradient(180deg, rgba(104,255,196,.30), rgba(32,180,121,.42));
+  color:#f3fff8;
+  font-weight:1000;
+  letter-spacing:.7px;
+  border-radius:14px;
+  padding: 14px 34px;
+  font-size: clamp(18px, 3vw, 24px);
+  box-shadow: 0 12px 36px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.2);
+}
+.playMenuCard{
+  width:min(760px, 95vw);
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(8,14,24,.70);
+  border-radius:18px;
+  padding: 14px;
+  box-shadow: 0 18px 44px rgba(0,0,0,.45);
+}
+.playMenuHead{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.playMenuHead h3{ margin:0; font-size:18px; letter-spacing:.3px; }
+.balanceInline{ font-weight:900; opacity:.95; display:flex; align-items:center; gap:6px; }
+.stakeGrid{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap:10px;
+  margin-top:10px;
+}
+.stakeBtn{
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:12px;
+  padding:12px 10px;
+  background: rgba(255,255,255,.06);
+  color:#fff;
+  font-weight:900;
+}
+.stakeBtn.active{
+  border-color: rgba(104,255,196,.75);
+  background: rgba(54,255,173,.20);
+  box-shadow: 0 0 0 1px rgba(104,255,196,.35) inset, 0 0 18px rgba(104,255,196,.28);
+}
+.menuSectionTitle{ margin: 12px 0 8px; font-size:13px; letter-spacing:.5px; opacity:.8; font-weight:900; text-transform:uppercase; }
+.wagerBox{
+  border:1px dashed rgba(255,255,255,.22);
+  border-radius:12px;
+  padding:12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.placeholderNote{ opacity:.78; font-size:13px; }
+.wagerBtn,
+.backBtn,
+.startRoundBtn{
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:12px;
+  padding:10px 12px;
+  background: rgba(255,255,255,.08);
+  color:#fff;
+  font-weight:900;
+}
+.startRoundBtn{ background: rgba(54,255,173,.20); border-color: rgba(104,255,196,.62); }
+.playMenuActions{ display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
+
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+
+
+<div class="menuLayer" id="menuLayer">
+  <div class="menuScreen show" id="lobbyScreen">
+    <div class="menuTop">
+      <div class="menuTopMiddle">
+        <button class="menuTopBtn" id="shopBtn">Shop</button>
+        <button class="menuTopBtn" id="inventoryBtn">Inventory</button>
+        <button class="menuTopBtn" id="infoBtn">Info</button>
+      </div>
+      <div class="balanceChip"><span class="scCoin">S</span><span id="scBalanceLobby">SC 1,250.00</span></div>
+    </div>
+    <div class="menuBody">
+      <div class="menuTitle">STACKED</div>
+      <div class="menuSub">Welcome to the lobby.</div>
+    </div>
+    <div class="menuBottom">
+      <button class="playCta" id="openPlayMenuBtn">PLAY</button>
+    </div>
+  </div>
+
+  <div class="menuScreen" id="playMenuScreen">
+    <div class="menuTop">
+      <div class="menuTopMiddle">
+        <button class="menuTopBtn" id="playShopBtn">Shop</button>
+        <button class="menuTopBtn" id="playInventoryBtn">Inventory</button>
+        <button class="menuTopBtn" id="playInfoBtn">Info</button>
+      </div>
+      <div class="balanceChip"><span class="scCoin">S</span><span id="scBalancePlay">SC 1,250.00</span></div>
+    </div>
+
+    <div class="menuBody">
+      <div class="playMenuCard">
+        <div class="playMenuHead">
+          <h3>Play Menu</h3>
+          <div class="balanceInline"><span class="scCoin">S</span><span id="scBalanceInline">SC 1,250.00</span></div>
+        </div>
+
+        <div class="menuSectionTitle">Choose Play Option</div>
+        <div class="stakeGrid" id="stakeGrid">
+          <button class="stakeBtn active" data-stake="1">$1</button>
+          <button class="stakeBtn" data-stake="5">$5</button>
+          <button class="stakeBtn" data-stake="10">$10</button>
+          <button class="stakeBtn" data-stake="25">$25</button>
+          <button class="stakeBtn" data-stake="50">$50</button>
+          <button class="stakeBtn" data-stake="100">$100</button>
+        </div>
+
+        <div class="menuSectionTitle">Wager</div>
+        <div class="wagerBox">
+          <div class="placeholderNote">Placeholder area for casino wager integration.</div>
+          <button class="wagerBtn" id="createWagerBtn">Create Wager</button>
+        </div>
+
+        <div class="playMenuActions">
+          <button class="backBtn" id="backToLobbyBtn">Back</button>
+          <button class="startRoundBtn" id="startRoundBtn">Start Round</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="hud">
   <div class="difficultyHud">
@@ -770,6 +975,18 @@ width: 3px;
   const elBest  = document.getElementById('best');
   const elOverlay = document.getElementById('overlay');
   const elToast = document.getElementById('toast');
+
+  const menuLayer = document.getElementById('menuLayer');
+  const lobbyScreen = document.getElementById('lobbyScreen');
+  const playMenuScreen = document.getElementById('playMenuScreen');
+  const openPlayMenuBtn = document.getElementById('openPlayMenuBtn');
+  const backToLobbyBtn = document.getElementById('backToLobbyBtn');
+  const startRoundBtn = document.getElementById('startRoundBtn');
+  const createWagerBtn = document.getElementById('createWagerBtn');
+  const stakeGrid = document.getElementById('stakeGrid');
+  const scBalanceLobby = document.getElementById('scBalanceLobby');
+  const scBalancePlay = document.getElementById('scBalancePlay');
+  const scBalanceInline = document.getElementById('scBalanceInline');
 
   const elDifficultyLabel = document.getElementById('difficultyLabel');
   const elDifficultyFill  = document.getElementById('difficultyFill');
@@ -1743,6 +1960,37 @@ for (let i=0;i<7;i++){
   }
 
   let state='ready';
+  let appMode='lobby'; // 'lobby' | 'playMenu' | 'game'
+  let selectedStake=1;
+  let scBalance=1250.00;
+
+  function setMenuScreen(which){
+    const lobbyOn = which === 'lobby';
+    const playOn = which === 'playMenu';
+    appMode = which;
+    if (lobbyScreen) lobbyScreen.classList.toggle('show', lobbyOn);
+    if (playMenuScreen) playMenuScreen.classList.toggle('show', playOn);
+    if (menuLayer) menuLayer.style.display = (which === 'game') ? 'none' : 'block';
+  }
+
+  function syncSCBalance(){
+    const txt = `SC ${scBalance.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}`;
+    if (scBalanceLobby) scBalanceLobby.textContent = txt;
+    if (scBalancePlay) scBalancePlay.textContent = txt;
+    if (scBalanceInline) scBalanceInline.textContent = txt;
+  }
+
+  function setStake(stake){
+    selectedStake = stake;
+    if (stakeGrid){
+      for (const btn of stakeGrid.querySelectorAll('.stakeBtn')){
+        const v = Number(btn.dataset.stake || 0);
+        btn.classList.toggle('active', v === selectedStake);
+      }
+    }
+    if (startRoundBtn) startRoundBtn.textContent = `Start Round ($${selectedStake})`;
+  }
+
   let placed=[];
   let falling=[];
   let score=0;
@@ -1827,9 +2075,13 @@ for (let i=0;i<7;i++){
     for (const sEl of elSkulls) sEl.classList.remove('on','current');
     for (const tEl of elTicks) tEl.classList.remove('passed','current');
     }
-  reset(true);
+  reset(false);
+  syncSCBalance();
+  setStake(selectedStake);
+  setMenuScreen('lobby');
 
   function startIfReady(){
+    if (appMode !== 'game') return;
     if (state==='ready'){
       state='playing';
       elOverlay.style.display='none';
@@ -1936,6 +2188,7 @@ for (let i=0;i<7;i++){
 
   function onAction(){
     if (devOpen) return;
+    if (appMode !== 'game') return;
     if (state!=='playing'){ startIfReady(); return; }
     placeCurrent();
   }
@@ -1943,15 +2196,56 @@ for (let i=0;i<7;i++){
   window.addEventListener('keydown', (e)=>{
     if (e.code==='Equal'){ e.preventDefault(); setDev(!devOpen); return; }
     if (e.code==='Escape' && devOpen){ e.preventDefault(); setDev(false); return; }
-    if (e.code==='Space' || e.code==='Enter'){ e.preventDefault(); onAction(); }
-    if (e.code==='KeyR') reset(false);
+    if ((e.code==='Space' || e.code==='Enter') && appMode==='game'){ e.preventDefault(); onAction(); }
+    if (e.code==='KeyR' && appMode==='game') reset(false);
   });
 
   window.addEventListener('pointerdown', (e)=>{
     if (devOpen) return;
+    if (e.target && e.target.closest && e.target.closest('.menuScreen')) return;
+    if (appMode !== 'game') return;
     e.preventDefault();
     onAction();
   }, {passive:false});
+
+
+  if (openPlayMenuBtn) openPlayMenuBtn.addEventListener('click', ()=>{
+    setMenuScreen('playMenu');
+  });
+
+  if (backToLobbyBtn) backToLobbyBtn.addEventListener('click', ()=>{
+    setMenuScreen('lobby');
+  });
+
+  if (startRoundBtn) startRoundBtn.addEventListener('click', ()=>{
+    setMenuScreen('game');
+    reset(false);
+    startIfReady();
+  });
+
+  if (createWagerBtn) createWagerBtn.addEventListener('click', ()=>{
+    showToast('CREATE WAGER (PLACEHOLDER)');
+    beep(700, 0.03, 'triangle', 0.03);
+  });
+
+  if (stakeGrid){
+    stakeGrid.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.stakeBtn');
+      if (!btn) return;
+      const v = Number(btn.dataset.stake || 1);
+      setStake(v);
+    });
+  }
+
+  for (const id of ['shopBtn','inventoryBtn','infoBtn','playShopBtn','playInventoryBtn','playInfoBtn']){
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    btn.addEventListener('click', ()=>{
+      showToast(`${btn.textContent.toUpperCase()} (COMING SOON)`);
+      beep(620, 0.025, 'sine', 0.025);
+    });
+  }
+
 
   function update(dt){
     if (state==='playing' && current){
