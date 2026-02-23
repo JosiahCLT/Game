@@ -491,7 +491,7 @@ width: 3px;
   font-weight:950;
   letter-spacing:.35px;
   padding:14px 22px;
-  min-width:126px;
+  min-width:166px;
   font-size:17px;
 }
 .menuTopBtn:active{ transform: translateY(1px); }
@@ -545,7 +545,7 @@ width: 3px;
   font-weight:1000;
   letter-spacing:.8px;
   border-radius:16px;
-  padding: 18px 52px;
+  padding: 18px 76px;
   font-size: clamp(24px, 4.2vw, 34px);
   box-shadow: 0 12px 36px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.2);
 }
@@ -579,7 +579,7 @@ width: 3px;
 .stakeBtn{
   border:1px solid rgba(255,255,255,.16);
   border-radius:12px;
-  padding:12px 10px;
+  padding:14px 14px;
   background: rgba(255,255,255,.06);
   color:#fff;
   font-weight:900;
@@ -590,13 +590,46 @@ width: 3px;
   box-shadow: 0 0 0 1px rgba(104,255,196,.35) inset, 0 0 18px rgba(104,255,196,.28);
 }
 .menuSectionTitle{ margin: 12px 0 8px; font-size:13px; letter-spacing:.5px; opacity:.8; font-weight:900; text-transform:uppercase; }
+.wagerTab{
+  margin-top: 10px;
+}
+.wagerTabBtn{
+  width:100%;
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:12px;
+  padding:13px 16px;
+  text-align:left;
+  background: rgba(255,255,255,.08);
+  color:#fff;
+  font-weight:950;
+  letter-spacing:.35px;
+}
+.wagerTabBtn::after{
+  content:'▾';
+  float:right;
+  opacity:.78;
+}
+.wagerTab.open .wagerTabBtn::after{ content:'▴'; }
 .wagerBox{
+  margin-top:8px;
   border:1px dashed rgba(255,255,255,.22);
   border-radius:12px;
   padding:12px;
-  display:flex;
+  display:none;
   flex-direction:column;
   gap:10px;
+}
+.wagerTab.open .wagerBox{ display:flex; }
+.wagerAmountInput{
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:10px;
+  background: rgba(0,0,0,.3);
+  color:#fff;
+  padding:12px 12px;
+  font-weight:900;
+  outline:none;
 }
 .wagerBtn,
 .backBtn,
@@ -672,8 +705,12 @@ width: 3px;
         </div>
 
         <div class="menuSectionTitle">Wager</div>
-        <div class="wagerBox">
-          <button class="wagerBtn" id="createWagerBtn">Create Wager</button>
+        <div class="wagerTab" id="wagerTab">
+          <button class="wagerTabBtn" id="wagerTabBtn" type="button">Wager Setup</button>
+          <div class="wagerBox" id="wagerBox">
+            <input class="wagerAmountInput" id="wagerAmountInput" type="number" min="1" step="1" placeholder="Enter wager amount" />
+            <button class="wagerBtn" id="createWagerBtn">Create Wager</button>
+          </div>
         </div>
 
         <div class="playMenuActions">
@@ -1000,6 +1037,9 @@ width: 3px;
   const backToLobbyBtn = document.getElementById('backToLobbyBtn');
   const startRoundBtn = document.getElementById('startRoundBtn');
   const createWagerBtn = document.getElementById('createWagerBtn');
+  const wagerTab = document.getElementById('wagerTab');
+  const wagerTabBtn = document.getElementById('wagerTabBtn');
+  const wagerAmountInput = document.getElementById('wagerAmountInput');
   const stakeGrid = document.getElementById('stakeGrid');
   const scBalanceLobby = document.getElementById('scBalanceLobby');
   const scBalancePlay = document.getElementById('scBalancePlay');
@@ -2240,8 +2280,16 @@ for (let i=0;i<7;i++){
     startIfReady();
   });
 
+  if (wagerTabBtn && wagerTab){
+    wagerTabBtn.addEventListener('click', ()=>{
+      wagerTab.classList.toggle('open');
+    });
+  }
+
   if (createWagerBtn) createWagerBtn.addEventListener('click', ()=>{
-    showToast('CREATE WAGER (PLACEHOLDER)');
+    const raw = wagerAmountInput ? Number(wagerAmountInput.value) : 0;
+    const wagerVal = Number.isFinite(raw) && raw > 0 ? raw : selectedStake;
+    showToast(`CREATE WAGER $${wagerVal} (PLACEHOLDER)`);
     beep(700, 0.03, 'triangle', 0.03);
   });
 
