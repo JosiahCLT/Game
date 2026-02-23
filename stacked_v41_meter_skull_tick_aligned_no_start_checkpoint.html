@@ -628,15 +628,23 @@ width: 3px;
   gap:10px;
 }
 .wagerAmountInput{
-  width:100%;
+  width:min(360px, 92%);
+  margin: 2px auto;
   box-sizing:border-box;
-  border:1px solid rgba(255,255,255,.16);
-  border-radius:10px;
-  background: rgba(0,0,0,.3);
+  border:1px solid rgba(255,255,255,.20);
+  border-radius:12px;
+  background: rgba(0,0,0,.34);
   color:#fff;
-  padding:12px 12px;
-  font-weight:900;
+  padding:14px 14px;
+  font-size: clamp(28px, 4.8vw, 40px);
+  font-weight:1000;
+  text-align:center;
   outline:none;
+}
+.wagerAmountInput::placeholder{
+  color: rgba(228,236,255,.62);
+  font-size: clamp(14px, 2vw, 18px);
+  font-weight:800;
 }
 .backBtn,
 .startRoundBtn{
@@ -702,7 +710,7 @@ width: 3px;
 
         <div class="playModeTabs" id="playModeTabs">
           <button class="playModeTabBtn active" id="quickPlayTabBtn" type="button">QUICK PLAY</button>
-          <button class="playModeTabBtn" id="wagerTabBtn" type="button">WAGER LAB</button>
+          <button class="playModeTabBtn" id="wagerTabBtn" type="button">WAGER</button>
         </div>
 
         <div class="playPanel active" id="quickPlayPanel">
@@ -718,14 +726,13 @@ width: 3px;
         </div>
 
         <div class="playPanel" id="wagerPanel">
-          <div class="menuSectionTitle">Custom Wager</div>
           <div class="wagerBox" id="wagerBox">
-            <input class="wagerAmountInput" id="wagerAmountInput" type="number" min="1" step="1" placeholder="Enter wager amount" />
+            <input class="wagerAmountInput" id="wagerAmountInput" type="number" min="1" step="1" placeholder="Type your amount" />
                       </div>
         </div>
 
         <div class="playMenuActions">
-          <button class="startRoundBtn" id="startRoundBtn">Start Round</button>
+          <button class="startRoundBtn" id="startRoundBtn">Find Match</button>
         </div>
       </div>
     </div>
@@ -2061,7 +2068,7 @@ for (let i=0;i<7;i++){
       const wagerVal = getWagerAmount();
       startRoundBtn.textContent = wagerVal > 0 ? `Create $${wagerVal} Wager` : 'Create Wager';
     } else {
-      startRoundBtn.textContent = `Start Round ($${selectedStake})`;
+      startRoundBtn.textContent = `Find Match ($${selectedStake})`;
     }
   }
 
