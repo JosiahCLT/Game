@@ -545,7 +545,7 @@ width: 3px;
   font-weight:1000;
   letter-spacing:.8px;
   border-radius:16px;
-  padding: 18px 76px;
+  padding: 18px 116px;
   font-size: clamp(24px, 4.2vw, 34px);
   box-shadow: 0 12px 36px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.2);
 }
@@ -590,36 +590,43 @@ width: 3px;
   box-shadow: 0 0 0 1px rgba(104,255,196,.35) inset, 0 0 18px rgba(104,255,196,.28);
 }
 .menuSectionTitle{ margin: 12px 0 8px; font-size:13px; letter-spacing:.5px; opacity:.8; font-weight:900; text-transform:uppercase; }
-.wagerTab{
-  margin-top: 10px;
-}
-.wagerTabBtn{
+.playModeTabs{
   width:100%;
-  border:1px solid rgba(255,255,255,.18);
-  border-radius:12px;
-  padding:13px 16px;
-  text-align:left;
-  background: rgba(255,255,255,.08);
-  color:#fff;
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:8px;
+  padding: 4px;
+  border-radius:14px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.12);
+  margin: 10px 0 10px;
+}
+.playModeTabBtn{
+  border:1px solid rgba(255,255,255,.16);
+  border-radius:11px;
+  padding:11px 10px;
+  background: rgba(255,255,255,.05);
+  color:#dce5ff;
   font-weight:950;
-  letter-spacing:.35px;
+  letter-spacing:1px;
 }
-.wagerTabBtn::after{
-  content:'▾';
-  float:right;
-  opacity:.78;
+.playModeTabBtn.active{
+  background: linear-gradient(180deg, rgba(65,185,255,.30), rgba(80,90,220,.34));
+  border-color: rgba(142,198,255,.56);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 0 20px rgba(88,132,255,.22);
+  color:#fff;
 }
-.wagerTab.open .wagerTabBtn::after{ content:'▴'; }
+.playPanel{ display:none; }
+.playPanel.active{ display:block; }
 .wagerBox{
-  margin-top:8px;
+  margin-top:0;
   border:1px dashed rgba(255,255,255,.22);
   border-radius:12px;
   padding:12px;
-  display:none;
+  display:flex;
   flex-direction:column;
   gap:10px;
 }
-.wagerTab.open .wagerBox{ display:flex; }
 .wagerAmountInput{
   width:100%;
   box-sizing:border-box;
@@ -694,19 +701,25 @@ width: 3px;
 
         <div class="balanceInline"><span class="scCoin">S</span><span id="scBalanceInline">SC 1,250.00</span></div>
 
-        <div class="menuSectionTitle">Choose Play Option</div>
-        <div class="stakeGrid" id="stakeGrid">
-          <button class="stakeBtn active" data-stake="1">$1</button>
-          <button class="stakeBtn" data-stake="5">$5</button>
-          <button class="stakeBtn" data-stake="10">$10</button>
-          <button class="stakeBtn" data-stake="25">$25</button>
-          <button class="stakeBtn" data-stake="50">$50</button>
-          <button class="stakeBtn" data-stake="100">$100</button>
+        <div class="playModeTabs" id="playModeTabs">
+          <button class="playModeTabBtn active" id="quickPlayTabBtn" type="button">QUICK PLAY</button>
+          <button class="playModeTabBtn" id="wagerTabBtn" type="button">WAGER LAB</button>
         </div>
 
-        <div class="menuSectionTitle">Wager</div>
-        <div class="wagerTab" id="wagerTab">
-          <button class="wagerTabBtn" id="wagerTabBtn" type="button">Wager Setup</button>
+        <div class="playPanel active" id="quickPlayPanel">
+          <div class="menuSectionTitle">Quick Play</div>
+          <div class="stakeGrid" id="stakeGrid">
+            <button class="stakeBtn active" data-stake="1">$1</button>
+            <button class="stakeBtn" data-stake="5">$5</button>
+            <button class="stakeBtn" data-stake="10">$10</button>
+            <button class="stakeBtn" data-stake="25">$25</button>
+            <button class="stakeBtn" data-stake="50">$50</button>
+            <button class="stakeBtn" data-stake="100">$100</button>
+          </div>
+        </div>
+
+        <div class="playPanel" id="wagerPanel">
+          <div class="menuSectionTitle">Custom Wager</div>
           <div class="wagerBox" id="wagerBox">
             <input class="wagerAmountInput" id="wagerAmountInput" type="number" min="1" step="1" placeholder="Enter wager amount" />
             <button class="wagerBtn" id="createWagerBtn">Create Wager</button>
@@ -1037,8 +1050,10 @@ width: 3px;
   const backToLobbyBtn = document.getElementById('backToLobbyBtn');
   const startRoundBtn = document.getElementById('startRoundBtn');
   const createWagerBtn = document.getElementById('createWagerBtn');
-  const wagerTab = document.getElementById('wagerTab');
+  const quickPlayTabBtn = document.getElementById('quickPlayTabBtn');
   const wagerTabBtn = document.getElementById('wagerTabBtn');
+  const quickPlayPanel = document.getElementById('quickPlayPanel');
+  const wagerPanel = document.getElementById('wagerPanel');
   const wagerAmountInput = document.getElementById('wagerAmountInput');
   const stakeGrid = document.getElementById('stakeGrid');
   const scBalanceLobby = document.getElementById('scBalanceLobby');
@@ -2280,11 +2295,16 @@ for (let i=0;i<7;i++){
     startIfReady();
   });
 
-  if (wagerTabBtn && wagerTab){
-    wagerTabBtn.addEventListener('click', ()=>{
-      wagerTab.classList.toggle('open');
-    });
+  function setPlayMode(mode){
+    const onQuick = mode === 'quick';
+    if (quickPlayTabBtn) quickPlayTabBtn.classList.toggle('active', onQuick);
+    if (wagerTabBtn) wagerTabBtn.classList.toggle('active', !onQuick);
+    if (quickPlayPanel) quickPlayPanel.classList.toggle('active', onQuick);
+    if (wagerPanel) wagerPanel.classList.toggle('active', !onQuick);
   }
+
+  if (quickPlayTabBtn) quickPlayTabBtn.addEventListener('click', ()=>setPlayMode('quick'));
+  if (wagerTabBtn) wagerTabBtn.addEventListener('click', ()=>setPlayMode('wager'));
 
   if (createWagerBtn) createWagerBtn.addEventListener('click', ()=>{
     const raw = wagerAmountInput ? Number(wagerAmountInput.value) : 0;
