@@ -620,7 +620,7 @@ width: 3px;
 .playPanel.active{ display:block; }
 .wagerBox{
   margin-top:0;
-  border:1px dashed rgba(255,255,255,.22);
+  border:1px solid rgba(255,255,255,.16);
   border-radius:12px;
   padding:12px;
   display:flex;
@@ -629,13 +629,15 @@ width: 3px;
 }
 .wagerAmountInput{
   width:min(360px, 92%);
+  height: 88px;
   margin: 2px auto;
   box-sizing:border-box;
   border:1px solid rgba(255,255,255,.20);
   border-radius:12px;
   background: rgba(0,0,0,.34);
   color:#fff;
-  padding:14px 14px;
+  padding:0 14px;
+  line-height: 88px;
   font-size: clamp(28px, 4.8vw, 40px);
   font-weight:1000;
   text-align:center;
